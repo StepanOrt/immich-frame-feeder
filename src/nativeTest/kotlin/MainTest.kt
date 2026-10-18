@@ -3,7 +3,6 @@ import io.ktor.client.engine.mock.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.utils.io.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.jsonObject
@@ -49,7 +48,7 @@ class MainTest {
                 engine {
                     addHandler {
                         respond(
-                            content = ByteReadChannel("OK"),
+                            content = "OK",
                             status = HttpStatusCode.OK
                         )
                     }
@@ -68,7 +67,7 @@ class MainTest {
                 engine {
                     addHandler {
                         respond(
-                            content = ByteReadChannel("Not Found"),
+                            content = "Not Found",
                             status = HttpStatusCode.NotFound
                         )
                     }
@@ -89,7 +88,7 @@ class MainTest {
                 engine {
                     addHandler {
                         respond(
-                            content = ByteReadChannel("""{"name": "test", "count": 42}"""),
+                            content = """{"name": "test", "count": 42}""",
                             status = HttpStatusCode.OK,
                             headers = headersOf(HttpHeaders.ContentType, "application/json")
                         )
@@ -110,7 +109,7 @@ class MainTest {
                 engine {
                     addHandler {
                         respond(
-                            content = ByteReadChannel("not json"),
+                            content = "not json",
                             status = HttpStatusCode.OK
                         )
                     }
@@ -161,12 +160,12 @@ class MainTest {
                         requestedPath = request.url.encodedPath
                         when (request.url.encodedPath) {
                             "/api/search/metadata" -> respond(
-                                content = ByteReadChannel(v3SearchJson),
+                                content = v3SearchJson,
                                 status = HttpStatusCode.OK,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json")
                             )
                             else -> respond(
-                                content = ByteReadChannel("Not Found"),
+                                content = "Not Found",
                                 status = HttpStatusCode.NotFound
                             )
                         }
@@ -228,7 +227,7 @@ class MainTest {
                 engine {
                     addHandler { _ ->
                         respond(
-                            content = ByteReadChannel(albumJson),
+                            content = albumJson,
                             status = HttpStatusCode.OK,
                             headers = headersOf(HttpHeaders.ContentType, "application/json")
                         )
@@ -257,7 +256,7 @@ class MainTest {
                 engine {
                     addHandler {
                         respond(
-                            content = ByteReadChannel(emptyAlbumJson),
+                            content = emptyAlbumJson,
                             status = HttpStatusCode.OK,
                             headers = headersOf(HttpHeaders.ContentType, "application/json")
                         )
@@ -283,7 +282,7 @@ class MainTest {
                 engine {
                     addHandler {
                         respond(
-                            content = ByteReadChannel(json),
+                            content = json,
                             status = HttpStatusCode.OK,
                             headers = headersOf(HttpHeaders.ContentType, "application/json")
                         )

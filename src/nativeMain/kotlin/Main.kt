@@ -6,17 +6,16 @@ import io.ktor.client.engine.curl.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toKString
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.Clock
 import kotlinx.serialization.json.*
 import okio.FileSystem
 import okio.Path.Companion.toPath
 import platform.posix.exit
 import platform.posix.getenv
-import kotlin.time.DurationUnit
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TimeSource
 
 fun parseFrameoHosts(sshConfig: String): List<String> =
     sshConfig.split("\n")
@@ -28,7 +27,6 @@ val PrettyPrintJson = Json {
     prettyPrint = true
 }
 
-@OptIn(ExperimentalForeignApi::class)
 fun env(name: String): String? = getenv(name)?.toKString()
 
 suspend fun HttpResponse.checkSuccess(): HttpResponse {
@@ -39,7 +37,7 @@ suspend fun HttpResponse.checkSuccess(): HttpResponse {
 }
 
 suspend fun HttpResponse.parseJson(): JsonElement =
-    PrettyPrintJson.decodeFromString(JsonElement.serializer(), bodyAsText())
+    PrettyPrintJson.decodeFromString(bodyAsText())
 
 fun resolveInputPath(originalPath: String, baseDir: String = "/data"): String {
     val clean = originalPath.removePrefix("/")
@@ -219,30 +217,27 @@ fun main() = SuspendApp {
     val fetch: suspend (String, String?) -> HttpResponse = { path, body ->
         if (body != null) {
             client.post("$immichUrl$path") {
-                headers {
-                    append("x-api-key", immichApiKey)
-                    append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
-                }
+                header("x-api-key", immichApiKey)
+                contentType(ContentType.Application.Json)
                 setBody(body)
             }
         } else {
             client.get("$immichUrl$path") {
-                headers {
-                    append("x-api-key", immichApiKey)
-                }
+                header("x-api-key", immichApiKey)
             }
         }
     }
 
     try {
         while (true) {
-            val start = Clock.System.now()
+            val timeMark = TimeSource.Monotonic.markNow()
             println("Running job")
             runJob(fetch, immichAlbumId, resolution, jpegQuality, frameoHosts)
-            val elapsed = (Clock.System.now() - start).toLong(DurationUnit.MILLISECONDS)
-            val waitTime = 60000L - elapsed
-            println("Waiting for $waitTime ms")
-            delay(waitTime)
+            val waitTime = 1.minutes - timeMark.elapsedNow()
+            if (waitTime.isPositive()) {
+                println("Waiting for $waitTime")
+                delay(waitTime)
+            }
         }
     } catch (e: Throwable) {
         println("Job cancelled")
