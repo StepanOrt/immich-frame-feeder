@@ -105,6 +105,18 @@ suspend fun getImmichAssets(
 
 private val AssetIdRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
+private val SshDefaultArgs = listOf(
+    "-o", "BatchMode=yes",
+    "-o", "ConnectTimeout=10",
+    "-o", "ServerAliveInterval=15",
+    "-o", "ServerAliveCountMax=3"
+)
+
+private val ScpDefaultArgs = listOf(
+    "-o", "BatchMode=yes",
+    "-o", "ConnectTimeout=10"
+)
+
 fun removeOldPictures(remoteAssetsByHost: Map<String, List<String>>, immichAssetIds: List<String>) {
     val immichSet = immichAssetIds.toSet()
     for ((host, assets) in remoteAssetsByHost) {
@@ -116,7 +128,10 @@ fun removeOldPictures(remoteAssetsByHost: Map<String, List<String>>, immichAsset
             for (chunk in oldAssets.chunked(100)) {
                 val filesToRemove = chunk.map { "/data/data/com.termux/files/home/storage/dcim/$it.jpg" }
                 val rmCmd = "rm -f " + filesToRemove.joinToString(" ")
-                val child = Command("ssh").args(listOf(host, rmCmd)).stdout(Stdio.Inherit).spawn()
+                val child = Command("ssh")
+                    .args(SshDefaultArgs + listOf(host, rmCmd))
+                    .stdout(Stdio.Inherit)
+                    .spawn()
                 if (child.wait() != 0) {
                     allSucceeded = false
                 }
@@ -144,7 +159,7 @@ fun runJob(
     val remoteAssetsByHost = mutableMapOf<String, List<String>>()
     for (host in frameoHosts) {
         val child = Command("ssh")
-            .args(listOf(host, "ls /data/data/com.termux/files/home/storage/dcim/"))
+            .args(SshDefaultArgs + listOf(host, "ls /data/data/com.termux/files/home/storage/dcim/"))
             .stdout(Stdio.Pipe)
             .spawn()
         val output = child.waitWithOutput()
@@ -203,14 +218,14 @@ fun runJob(
             val partPath = "/data/data/com.termux/files/home/storage/dcim/$id.jpg.part"
             val finalPath = "/data/data/com.termux/files/home/storage/dcim/$id.jpg"
             val scpChild = Command("scp")
-                .args(listOf(outputPath, "$host:$partPath"))
+                .args(ScpDefaultArgs + listOf(outputPath, "$host:$partPath"))
                 .stdout(Stdio.Inherit)
                 .spawn()
             if (scpChild.wait() != 0) {
                 println("Failed to push $outputPath to $host")
             } else {
                 val mvChild = Command("ssh")
-                    .args(listOf(host, "mv '$partPath' '$finalPath'"))
+                    .args(SshDefaultArgs + listOf(host, "mv '$partPath' '$finalPath'"))
                     .stdout(Stdio.Inherit)
                     .spawn()
                 if (mvChild.wait() != 0) {
@@ -265,19 +280,21 @@ fun main() = SuspendApp {
         }
     }
 
-    try {
-        while (true) {
-            val timeMark = TimeSource.Monotonic.markNow()
-            println("Running job")
+    while (true) {
+        val timeMark = TimeSource.Monotonic.markNow()
+        println("Running job")
+        try {
             runJob(fetch, immichAlbumId, resolution, jpegQuality, frameoHosts)
-            val waitTime = 1.minutes - timeMark.elapsedNow()
-            if (waitTime.isPositive()) {
-                println("Waiting for $waitTime")
-                delay(waitTime)
-            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            println("Job cancelled")
+            throw e
+        } catch (e: Throwable) {
+            println("Error in job execution: ${e.message}")
         }
-    } catch (e: Throwable) {
-        println("Job cancelled")
-        exit(0)
+        val waitTime = 1.minutes - timeMark.elapsedNow()
+        if (waitTime.isPositive()) {
+            println("Waiting for $waitTime")
+            delay(waitTime)
+        }
     }
 }
