@@ -319,6 +319,9 @@ fun main() = SuspendApp {
         }
     }
 
+    val pollIntervalSeconds = env("POLL_INTERVAL_SECONDS")?.toLongOrNull() ?: 60L
+    val pollDuration = kotlin.time.Duration.parseOrNull("${pollIntervalSeconds}s") ?: 1.minutes
+
     while (true) {
         val timeMark = TimeSource.Monotonic.markNow()
         println("Running job")
@@ -330,7 +333,7 @@ fun main() = SuspendApp {
         } catch (e: Throwable) {
             println("Error in job execution: ${e.message}")
         }
-        val waitTime = 1.minutes - timeMark.elapsedNow()
+        val waitTime = pollDuration - timeMark.elapsedNow()
         if (waitTime.isPositive()) {
             println("Waiting for $waitTime")
             delay(waitTime)
