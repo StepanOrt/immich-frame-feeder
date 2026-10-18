@@ -131,27 +131,42 @@ fun runJob(
         getImmichAssets(fetch, albumId)
     }
 
-    val remoteAssetsByHost: Map<String, List<String>> = frameoHosts.associateWith { host ->
+    val remoteAssetsByHost = mutableMapOf<String, List<String>>()
+    for (host in frameoHosts) {
         val child = Command("ssh")
             .args(listOf(host, "ls /data/data/com.termux/files/home/storage/dcim/"))
             .stdout(Stdio.Pipe)
             .spawn()
         val output = child.waitWithOutput()
         if (output.status == 0) {
-            output.stdout?.split("\n")
+            val assets = output.stdout?.split("\n")
                 ?.filter { it.endsWith(".jpg") }
                 ?.map { it.removeSuffix(".jpg") }
                 ?: emptyList()
+            remoteAssetsByHost[host] = assets
         } else {
-            println("Failed to list existing assets on $host")
-            emptyList()
+            println("Failed to list existing assets on $host; skipping host for this cycle")
         }
     }
 
-    val allRemoteAssets = remoteAssetsByHost.values.flatten().toMutableSet().toList()
-    val newPictures = immichAssets.filter { it.first !in allRemoteAssets }
+    if (remoteAssetsByHost.isEmpty()) {
+        println("No reachable Frameo hosts in this cycle")
+        return
+    }
 
-    for ((id, originalPath) in newPictures) {
+    val immichAssetMap = immichAssets.toMap()
+    val hostsNeedingAsset = mutableMapOf<String, MutableList<String>>() // assetId -> list of hosts
+    for ((host, remoteAssets) in remoteAssetsByHost) {
+        val remoteSet = remoteAssets.toSet()
+        for ((id, _) in immichAssets) {
+            if (id !in remoteSet) {
+                hostsNeedingAsset.getOrPut(id) { mutableListOf() }.add(host)
+            }
+        }
+    }
+
+    for ((id, targetHosts) in hostsNeedingAsset) {
+        val originalPath = immichAssetMap[id] ?: continue
         val inputPath = resolveInputPath(originalPath)
         if (FileSystem.SYSTEM.metadataOrNull(inputPath.toPath()) == null) {
             println("Input file $inputPath doesn't exist")
@@ -159,20 +174,22 @@ fun runJob(
         }
 
         val outputPath = "/tmp/$id.jpg"
-        val convertChild = Command("convert")
-            .args(listOf(inputPath, "-resize", "${resolution}^", "-quality", quality, outputPath))
-            .stdout(Stdio.Pipe)
-            .spawn()
+        if (FileSystem.SYSTEM.metadataOrNull(outputPath.toPath()) == null) {
+            val convertChild = Command("convert")
+                .args(listOf(inputPath, "-resize", "${resolution}^", "-quality", quality, outputPath))
+                .stdout(Stdio.Pipe)
+                .spawn()
 
-        if (convertChild.wait() != 0) {
-            println("Failed to convert $inputPath")
-            continue
-        } else {
-            println("Converted $inputPath")
+            if (convertChild.wait() != 0) {
+                println("Failed to convert $inputPath")
+                continue
+            } else {
+                println("Converted $inputPath")
+            }
         }
 
-        println("Pushing $outputPath to Frameo devices")
-        for (host in frameoHosts) {
+        println("Pushing $outputPath to Frameo devices: $targetHosts")
+        for (host in targetHosts) {
             val scpChild = Command("scp")
                 .args(listOf(outputPath, "$host:/data/data/com.termux/files/home/storage/dcim/"))
                 .stdout(Stdio.Pipe)
