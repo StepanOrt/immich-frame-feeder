@@ -6,5 +6,6 @@ RUN apt-get update && apt-get install -y \
     imagemagick \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --chmod=700 ImmichFrameFeeder.kexe /application
+COPY ImmichFrameFeeder.kexe /application
+RUN chmod 755 /application
 CMD ["/application"]

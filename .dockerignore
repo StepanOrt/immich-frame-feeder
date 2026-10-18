@@ -1,0 +1,9 @@
+.git
+.gradle
+build
+.idea
+.vscode
+*.iml
+.env
+ssh_config/*
+!ssh_config/config.example

@@ -60,7 +60,17 @@ JPEG_QUALITY=99%
 
 ### 3. Run with Docker Compose
 
+To pull and run using the published GitHub Container Registry image:
+
 ```bash
+docker compose up -d
+```
+
+Or build and run locally from source:
+
+```bash
+./gradlew linkReleaseExecutableNative
+cp build/bin/native/ImmichFrameFeederReleaseExecutable/ImmichFrameFeeder.kexe ./ImmichFrameFeeder.kexe
 docker compose up -d --build
 ```
 

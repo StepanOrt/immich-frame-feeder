@@ -2,7 +2,7 @@ services:
   frameo:
     restart: unless-stopped
     container_name: frameo
-    image: frameo
+    image: ghcr.io/stepanort/immich-frame-feeder:latest
     build:
       dockerfile: Dockerfile
       context: .
