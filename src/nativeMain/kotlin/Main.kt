@@ -7,8 +7,6 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.cstr
-import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.toKString
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -20,14 +18,18 @@ import platform.posix.exit
 import platform.posix.getenv
 import kotlin.time.DurationUnit
 
+fun parseFrameoHosts(sshConfig: String): List<String> =
+    sshConfig.split("\n")
+        .filter { it.startsWith("Host") }
+        .map { it.split(" ").last() }
+        .filter { it.startsWith("frameo") }
+
 val PrettyPrintJson = Json {
     prettyPrint = true
 }
 
 @OptIn(ExperimentalForeignApi::class)
-fun env(name: String): String? = memScoped {
-    getenv(name.cstr.getPointer(this))?.toKString()
-}
+fun env(name: String): String? = getenv(name)?.toKString()
 
 suspend fun HttpResponse.checkSuccess(): HttpResponse {
     if (status.value !in 200..299) {
@@ -71,7 +73,7 @@ fun removeOldPictures(remoteAssetsByHost: Map<String, List<String>>, immichAsset
             println("Removing $oldAssets from $host")
             val filesToRemove = oldAssets.map { "/data/data/com.termux/files/home/storage/dcim/$it.jpg" }
             val rmCmd = "rm " + filesToRemove.joinToString(" ")
-            val child = Command("ssh").args(host, rmCmd).stdout(Stdio.Pipe).spawn()
+            val child = Command("ssh").args(listOf(host, rmCmd)).stdout(Stdio.Pipe).spawn()
             if (child.wait() == 0) {
                 println("Removed old assets on $host")
             } else {
@@ -94,14 +96,15 @@ fun runJob(
 
     val remoteAssetsByHost: Map<String, List<String>> = frameoHosts.associateWith { host ->
         val child = Command("ssh")
-            .args(host, "ls /data/data/com.termux/files/home/storage/dcim/")
+            .args(listOf(host, "ls /data/data/com.termux/files/home/storage/dcim/"))
             .stdout(Stdio.Pipe)
             .spawn()
         val output = child.waitWithOutput()
         if (child.wait() == 0) {
-            output.stdout.split("\n")
-                .filter { it.endsWith(".jpg") }
-                .map { it.removeSuffix(".jpg") }
+            output.stdout?.split("\n")
+                ?.filter { it.endsWith(".jpg") }
+                ?.map { it.removeSuffix(".jpg") }
+                ?: emptyList()
         } else {
             println("Failed to list existing assets on $host")
             emptyList()
@@ -120,7 +123,7 @@ fun runJob(
 
         val outputPath = "/tmp/$id.jpg"
         val convertChild = Command("convert")
-            .args(inputPath, "-resize", "${resolution}^", "-quality", quality, outputPath)
+            .args(listOf(inputPath, "-resize", "${resolution}^", "-quality", quality, outputPath))
             .stdout(Stdio.Pipe)
             .spawn()
 
@@ -134,7 +137,7 @@ fun runJob(
         println("Pushing $outputPath to Frameo devices")
         for (host in frameoHosts) {
             val scpChild = Command("scp")
-                .args(outputPath, "$host:/data/data/com.termux/files/home/storage/dcim/")
+                .args(listOf(outputPath, "$host:/data/data/com.termux/files/home/storage/dcim/"))
                 .stdout(Stdio.Pipe)
                 .spawn()
             if (scpChild.wait() != 0) {
@@ -162,10 +165,7 @@ fun main() = SuspendApp {
     }
 
     val sshConfig = FileSystem.SYSTEM.read(sshConfigPath) { readUtf8() }
-    val frameoHosts = sshConfig.split("\n")
-        .filter { it.startsWith("Host") }
-        .map { it.split(" ").last() }
-        .filter { it.startsWith("frameo") }
+    val frameoHosts = parseFrameoHosts(sshConfig)
 
     val client = HttpClient(Curl)
 
