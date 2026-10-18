@@ -137,7 +137,7 @@ fun runJob(
             .stdout(Stdio.Pipe)
             .spawn()
         val output = child.waitWithOutput()
-        if (child.wait() == 0) {
+        if (output.status == 0) {
             output.stdout?.split("\n")
                 ?.filter { it.endsWith(".jpg") }
                 ?.map { it.removeSuffix(".jpg") }
