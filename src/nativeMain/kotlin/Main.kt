@@ -79,28 +79,33 @@ suspend fun getImmichAssets(
 
         allAssets.addAll(assets)
 
-        if (assets.size < 1000 || json.jsonObject["assets"] is JsonArray) {
+        val hasNextPage = when (val assetsElement = json.jsonObject["assets"]) {
+            is JsonObject -> assetsElement["nextPage"] != null && assetsElement["nextPage"] !is JsonNull
+            else -> false
+        }
+        val isLegacyArray = json.jsonObject["assets"] is JsonArray
+
+        if (isLegacyArray || (!hasNextPage && assets.size < 1000) || assets.isEmpty()) {
             break
         }
         page++
     }
 
     val images = allAssets.filter {
-        it.jsonObject["type"]?.jsonPrimitive?.content.equals("IMAGE", ignoreCase = true)
+        it.jsonObject["type"]?.jsonPrimitive?.contentOrNull.equals("IMAGE", ignoreCase = true)
     }.sortedWith(
         compareBy {
-            it.jsonObject["fileCreatedAt"]?.jsonPrimitive?.content
+            it.jsonObject["fileCreatedAt"]?.jsonPrimitive?.contentOrNull
                 ?: throw IllegalStateException("Asset doesn't have fileCreatedAt")
         }
     ).reversed()
 
-    return images.map {
-        Pair(
-            it.jsonObject["id"]?.jsonPrimitive?.content
-                ?: throw IllegalStateException("Asset doesn't have id"),
-            it.jsonObject["originalPath"]?.jsonPrimitive?.content
-                ?: throw IllegalStateException("Asset doesn't have originalPath")
-        )
+    return images.map { asset ->
+        val id = asset.jsonObject["id"]?.jsonPrimitive?.contentOrNull
+            ?: throw IllegalStateException("Asset doesn't have id")
+        val originalPath = asset.jsonObject["originalPath"]?.jsonPrimitive?.contentOrNull
+            ?: throw IllegalStateException("Asset doesn't have originalPath")
+        Pair(id, originalPath)
     }
 }
 
