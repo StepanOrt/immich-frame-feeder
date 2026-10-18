@@ -63,7 +63,11 @@ suspend fun getImmichAssets(
     val allAssets = mutableListOf<JsonElement>()
 
     while (true) {
-        val requestBody = """{"albumIds":["$albumId"],"page":$page,"size":1000}"""
+        val requestBody = buildJsonObject {
+            putJsonArray("albumIds") { add(albumId) }
+            put("page", page)
+            put("size", 1000)
+        }.toString()
         val response = fetch("/api/search/metadata", requestBody)
         val json = response.checkSuccess().parseJson()
 
