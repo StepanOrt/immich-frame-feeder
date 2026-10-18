@@ -3,10 +3,14 @@ name: Publish Docker Image
 on:
   push:
     branches: [ "main" ]
-    tags: [ "v*.*.*", "v*" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
