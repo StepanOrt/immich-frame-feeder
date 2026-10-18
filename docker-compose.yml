@@ -14,5 +14,5 @@ services:
       JPEG_QUALITY: ${JPEG_QUALITY:-99%}
     volumes:
       - ./ssh_config:/root/.ssh:ro
-      - ${IMMICH_LIBRARY_PATH:-/mnt/pool/immich/library}:/data/upload
+      - ${IMMICH_LIBRARY_PATH:-/mnt/pool/immich/library}:/data/upload:ro
       - ${FOTO_LIBRARY_PATH:-/mnt/pool/foto}:/data/foto:ro
