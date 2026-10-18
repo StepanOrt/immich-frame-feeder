@@ -39,6 +39,7 @@ Host frameo_living_room
 ```
 
 > **Note**: Host names in `config` must start with `frameo` to be detected by the feeder.
+> Ensure `known_hosts` or `StrictHostKeyChecking accept-new` / `UserKnownHostsFile /dev/null` is properly configured, as `./ssh_config` is mounted read-only (`:ro`). Also ensure your private key file has `chmod 600` permissions.
 
 ### 2. Configure Environment
 
