@@ -103,18 +103,28 @@ suspend fun getImmichAssets(
 ): List<Pair<String, String>> = getImmichAssets({ path, _ -> fetch(path) }, albumId)
 
 
+private val AssetIdRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
 fun removeOldPictures(remoteAssetsByHost: Map<String, List<String>>, immichAssetIds: List<String>) {
+    val immichSet = immichAssetIds.toSet()
     for ((host, assets) in remoteAssetsByHost) {
-        val oldAssets = assets.filter { it !in immichAssetIds }
+        val oldAssets = assets.filter { it.matches(AssetIdRegex) && it !in immichSet }
         if (oldAssets.isNotEmpty()) {
-            println("Removing $oldAssets from $host")
-            val filesToRemove = oldAssets.map { "/data/data/com.termux/files/home/storage/dcim/$it.jpg" }
-            val rmCmd = "rm " + filesToRemove.joinToString(" ")
-            val child = Command("ssh").args(listOf(host, rmCmd)).stdout(Stdio.Pipe).spawn()
-            if (child.wait() == 0) {
+            println("Removing ${oldAssets.size} old assets from $host")
+            // Batch deletion to avoid E2BIG command line length limits
+            var allSucceeded = true
+            for (chunk in oldAssets.chunked(100)) {
+                val filesToRemove = chunk.map { "/data/data/com.termux/files/home/storage/dcim/$it.jpg" }
+                val rmCmd = "rm -f " + filesToRemove.joinToString(" ")
+                val child = Command("ssh").args(listOf(host, rmCmd)).stdout(Stdio.Inherit).spawn()
+                if (child.wait() != 0) {
+                    allSucceeded = false
+                }
+            }
+            if (allSucceeded) {
                 println("Removed old assets on $host")
             } else {
-                println("Failed to remove old assets on $host")
+                println("Failed to remove some old assets on $host")
             }
         }
     }
