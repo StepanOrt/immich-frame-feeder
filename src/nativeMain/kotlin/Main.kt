@@ -220,25 +220,29 @@ fun runJob(
             }
         }
 
-        println("Pushing $outputPath to Frameo devices: $targetHosts")
-        for (host in targetHosts) {
-            val partPath = "/data/data/com.termux/files/home/storage/dcim/$id.jpg.part"
-            val finalPath = "/data/data/com.termux/files/home/storage/dcim/$id.jpg"
-            val scpChild = Command("scp")
-                .args(ScpDefaultArgs + listOf(outputPath, "$host:$partPath"))
-                .stdout(Stdio.Inherit)
-                .spawn()
-            if (scpChild.wait() != 0) {
-                println("Failed to push $outputPath to $host")
-            } else {
-                val mvChild = Command("ssh")
-                    .args(SshDefaultArgs + listOf(host, "mv '$partPath' '$finalPath'"))
+        try {
+            println("Pushing $outputPath to Frameo devices: $targetHosts")
+            for (host in targetHosts) {
+                val partPath = "/data/data/com.termux/files/home/storage/dcim/$id.jpg.part"
+                val finalPath = "/data/data/com.termux/files/home/storage/dcim/$id.jpg"
+                val scpChild = Command("scp")
+                    .args(ScpDefaultArgs + listOf(outputPath, "$host:$partPath"))
                     .stdout(Stdio.Inherit)
                     .spawn()
-                if (mvChild.wait() != 0) {
-                    println("Failed to finalize $id.jpg on $host")
+                if (scpChild.wait() != 0) {
+                    println("Failed to push $outputPath to $host")
+                } else {
+                    val mvChild = Command("ssh")
+                        .args(SshDefaultArgs + listOf(host, "mv '$partPath' '$finalPath'"))
+                        .stdout(Stdio.Inherit)
+                        .spawn()
+                    if (mvChild.wait() != 0) {
+                        println("Failed to finalize $id.jpg on $host")
+                    }
                 }
             }
+        } finally {
+            FileSystem.SYSTEM.delete(outputPath.toPath(), mustExist = false)
         }
     }
 
