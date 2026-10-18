@@ -18,10 +18,13 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeSource
 
 fun parseFrameoHosts(sshConfig: String): List<String> =
-    sshConfig.split("\n")
-        .filter { it.startsWith("Host") }
-        .map { it.split(" ").last() }
-        .filter { it.startsWith("frameo") }
+    sshConfig.lines()
+        .map { it.trim() }
+        .filter { it.matches(Regex("^(?i)Host\\s+.*")) }
+        .flatMap { line ->
+            line.split(Regex("\\s+")).drop(1)
+        }
+        .filter { it.startsWith("frameo") && !it.contains("*") && !it.contains("?") }
 
 val PrettyPrintJson = Json {
     prettyPrint = true

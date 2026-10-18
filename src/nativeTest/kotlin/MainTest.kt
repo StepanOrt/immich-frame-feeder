@@ -42,6 +42,12 @@ class MainTest {
     }
 
     @Test
+    fun testParseFrameoHostsEdgeCases() {
+        val sshConfig = "  Host\tframeo1\tframeo2\r\n\tHostName frameo-fake.lan\r\nHost frameo* other\r\n"
+        assertEquals(listOf("frameo1", "frameo2"), parseFrameoHosts(sshConfig))
+    }
+
+    @Test
     fun testCheckSuccessValid() {
         runBlocking {
             val client = HttpClient(MockEngine) {
