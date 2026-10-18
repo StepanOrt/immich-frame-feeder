@@ -213,8 +213,8 @@ fun runJob(
         val outputPath = "/tmp/$id.jpg"
         if (FileSystem.SYSTEM.metadataOrNull(outputPath.toPath()) == null) {
             val convertChild = Command("convert")
-                .args(listOf(inputPath, "-resize", "${resolution}^", "-quality", quality, outputPath))
-                .stdout(Stdio.Pipe)
+                .args(listOf(inputPath, "-auto-orient", "-strip", "-resize", "${resolution}^", "-quality", quality, outputPath))
+                .stdout(Stdio.Inherit)
                 .spawn()
 
             if (convertChild.wait() != 0) {
