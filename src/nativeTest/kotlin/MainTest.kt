@@ -344,4 +344,16 @@ class MainTest {
         // Should complete without error or attempting to spawn ssh
         removeOldPictures(remoteAssets, immichAssetIds)
     }
+
+    @Test
+    fun testRemoveOldPicturesIgnoresNonUuidFiles() {
+        // Non-UUID files such as user photos or system files in DCIM must never be deleted
+        val remoteAssets = mapOf(
+            "frameo1" to listOf("IMG_0001", "some_pic", "dcim_backup")
+        )
+        val immichAssetIds = listOf<String>()
+
+        // Non-UUID files will be filtered out by AssetIdRegex so no ssh command is executed
+        removeOldPictures(remoteAssets, immichAssetIds)
+    }
 }
