@@ -41,13 +41,46 @@ suspend fun HttpResponse.checkSuccess(): HttpResponse {
 suspend fun HttpResponse.parseJson(): JsonElement =
     PrettyPrintJson.decodeFromString(JsonElement.serializer(), bodyAsText())
 
-suspend fun getImmichAssets(fetch: (String) -> HttpResponse, albumId: String): List<Pair<String, String>> {
-    val response = fetch("/api/albums/$albumId")
-    val json = response.checkSuccess().parseJson()
-    val assets = json.jsonObject["assets"]?.jsonArray
-        ?: throw IllegalStateException("No assets found")
+fun resolveInputPath(originalPath: String, baseDir: String = "/data"): String {
+    val clean = originalPath.removePrefix("/")
+    val candidates = listOf(
+        if (originalPath.startsWith("/")) originalPath else "$baseDir/$clean",
+        "$baseDir/$clean",
+        "$baseDir/${clean.removePrefix("data/")}",
+        "$baseDir/upload/${clean.removePrefix("data/library/").removePrefix("library/")}",
+        "$baseDir/upload/$clean"
+    ).distinct()
+    return candidates.firstOrNull { FileSystem.SYSTEM.metadataOrNull(it.toPath()) != null }
+        ?: candidates.first()
+}
 
-    val images = assets.filter {
+suspend fun getImmichAssets(
+    fetch: suspend (path: String, body: String?) -> HttpResponse,
+    albumId: String
+): List<Pair<String, String>> {
+    var page = 1
+    val allAssets = mutableListOf<JsonElement>()
+
+    while (true) {
+        val requestBody = """{"albumIds":["$albumId"],"page":$page,"size":1000}"""
+        val response = fetch("/api/search/metadata", requestBody)
+        val json = response.checkSuccess().parseJson()
+
+        val assets = when (val assetsElement = json.jsonObject["assets"]) {
+            is JsonArray -> assetsElement
+            is JsonObject -> assetsElement["items"]?.jsonArray
+            else -> null
+        } ?: throw IllegalStateException("No assets found")
+
+        allAssets.addAll(assets)
+
+        if (assets.size < 1000 || json.jsonObject["assets"] is JsonArray) {
+            break
+        }
+        page++
+    }
+
+    val images = allAssets.filter {
         it.jsonObject["type"]?.jsonPrimitive?.content.equals("IMAGE", ignoreCase = true)
     }.sortedWith(
         compareBy {
@@ -65,6 +98,12 @@ suspend fun getImmichAssets(fetch: (String) -> HttpResponse, albumId: String): L
         )
     }
 }
+
+suspend fun getImmichAssets(
+    fetch: (String) -> HttpResponse,
+    albumId: String
+): List<Pair<String, String>> = getImmichAssets({ path, _ -> fetch(path) }, albumId)
+
 
 fun removeOldPictures(remoteAssetsByHost: Map<String, List<String>>, immichAssetIds: List<String>) {
     for ((host, assets) in remoteAssetsByHost) {
@@ -84,7 +123,7 @@ fun removeOldPictures(remoteAssetsByHost: Map<String, List<String>>, immichAsset
 }
 
 fun runJob(
-    fetch: (String) -> HttpResponse,
+    fetch: suspend (String, String?) -> HttpResponse,
     albumId: String,
     resolution: String,
     quality: String,
@@ -115,7 +154,7 @@ fun runJob(
     val newPictures = immichAssets.filter { it.first !in allRemoteAssets }
 
     for ((id, originalPath) in newPictures) {
-        val inputPath = "/data/$originalPath"
+        val inputPath = resolveInputPath(originalPath)
         if (FileSystem.SYSTEM.metadataOrNull(inputPath.toPath()) == null) {
             println("Input file $inputPath doesn't exist")
             continue
@@ -150,6 +189,14 @@ fun runJob(
     removeOldPictures(remoteAssetsByHost, immichAssetIds)
 }
 
+fun runJob(
+    fetch: (String) -> HttpResponse,
+    albumId: String,
+    resolution: String,
+    quality: String,
+    frameoHosts: List<String>
+): Unit = runJob({ path, _ -> fetch(path) }, albumId, resolution, quality, frameoHosts)
+
 fun main() = SuspendApp {
     val immichUrl = env("IMMICH_URL") ?: throw Throwable("Immich URL not found")
     val immichAlbumId = env("IMMICH_ALBUM_ID") ?: throw Throwable("Album ID not found")
@@ -169,8 +216,16 @@ fun main() = SuspendApp {
 
     val client = HttpClient(Curl)
 
-    val fetch: (String) -> HttpResponse = { path ->
-        runBlocking {
+    val fetch: suspend (String, String?) -> HttpResponse = { path, body ->
+        if (body != null) {
+            client.post("$immichUrl$path") {
+                headers {
+                    append("x-api-key", immichApiKey)
+                    append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                }
+                setBody(body)
+            }
+        } else {
             client.get("$immichUrl$path") {
                 headers {
                     append("x-api-key", immichApiKey)

@@ -12,7 +12,7 @@ A lightweight Kotlin Native daemon that syncs photos from a designated [Immich](
 
 ## How It Works
 
-1. Queries the Immich API (`/api/albums/{id}`) using your API key.
+1. Queries the Immich API (`/api/search/metadata`) using your API key and album ID.
 2. Lists existing images on Frameo devices over SSH (`ls /data/data/com.termux/files/home/storage/dcim/`).
 3. For any new photo in the album:
    - Locates the original file from the local library mount (`/data/<originalPath>`).
@@ -73,4 +73,4 @@ Requirements:
 ```bash
 ./gradlew linkReleaseExecutableNative
 ```
-The compiled binary will be placed at `build/bin/native/releaseExecutable/KotlinNativeTemplate.kexe`.
+The compiled binary will be placed at `build/bin/native/KotlinNativeTemplateReleaseExecutable/KotlinNativeTemplate.kexe`.

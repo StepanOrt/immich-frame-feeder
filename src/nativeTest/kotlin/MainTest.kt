@@ -124,7 +124,78 @@ class MainTest {
     }
 
     @Test
-    fun testGetImmichAssetsSuccess() {
+    fun testGetImmichAssetsV3Success() {
+        runBlocking {
+            val v3SearchJson = """
+            {
+                "assets": {
+                    "count": 3,
+                    "items": [
+                        {
+                            "id": "asset-1",
+                            "type": "IMAGE",
+                            "fileCreatedAt": "2023-01-01T10:00:00Z",
+                            "originalPath": "/data/library/user/asset-1.jpg"
+                        },
+                        {
+                            "id": "asset-2",
+                            "type": "VIDEO",
+                            "fileCreatedAt": "2023-01-05T10:00:00Z",
+                            "originalPath": "/data/library/user/asset-2.mp4"
+                        },
+                        {
+                            "id": "asset-3",
+                            "type": "image",
+                            "fileCreatedAt": "2023-01-03T10:00:00Z",
+                            "originalPath": "/data/library/user/asset-3.jpg"
+                        }
+                    ]
+                }
+            }
+            """.trimIndent()
+
+            var requestedPath = ""
+            val client = HttpClient(MockEngine) {
+                engine {
+                    addHandler { request ->
+                        requestedPath = request.url.encodedPath
+                        when (request.url.encodedPath) {
+                            "/api/search/metadata" -> respond(
+                                content = ByteReadChannel(v3SearchJson),
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json")
+                            )
+                            else -> respond(
+                                content = ByteReadChannel("Not Found"),
+                                status = HttpStatusCode.NotFound
+                            )
+                        }
+                    }
+                }
+            }
+
+            val fetch: suspend (String, String?) -> HttpResponse = { path, body ->
+                client.post(path) {
+                    if (body != null) {
+                        headers {
+                            append(HttpHeaders.ContentType, "application/json")
+                        }
+                        setBody(body)
+                    }
+                }
+            }
+
+            val assets = getImmichAssets(fetch, "album-123")
+
+            assertEquals("/api/search/metadata", requestedPath)
+            assertEquals(2, assets.size)
+            assertEquals(Pair("asset-3", "/data/library/user/asset-3.jpg"), assets[0])
+            assertEquals(Pair("asset-1", "/data/library/user/asset-1.jpg"), assets[1])
+        }
+    }
+
+    @Test
+    fun testGetImmichAssetsLegacySuccess() {
         runBlocking {
             val albumJson = """
             {
@@ -155,18 +226,12 @@ class MainTest {
 
             val client = HttpClient(MockEngine) {
                 engine {
-                    addHandler { request ->
-                        when (request.url.encodedPath) {
-                            "/api/albums/album-123" -> respond(
-                                content = ByteReadChannel(albumJson),
-                                status = HttpStatusCode.OK,
-                                headers = headersOf(HttpHeaders.ContentType, "application/json")
-                            )
-                            else -> respond(
-                                content = ByteReadChannel("Not Found"),
-                                status = HttpStatusCode.NotFound
-                            )
-                        }
+                    addHandler { _ ->
+                        respond(
+                            content = ByteReadChannel(albumJson),
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "application/json")
+                        )
                     }
                 }
             }
@@ -177,7 +242,6 @@ class MainTest {
 
             val assets = getImmichAssets(fetch, "album-123")
 
-            // Should filter out VIDEO and sort descending by fileCreatedAt (asset-3 is 2023-01-03, asset-1 is 2023-01-01)
             assertEquals(2, assets.size)
             assertEquals(Pair("asset-3", "upload/user/asset-3.jpg"), assets[0])
             assertEquals(Pair("asset-1", "upload/user/asset-1.jpg"), assets[1])
@@ -251,6 +315,16 @@ class MainTest {
                 getImmichAssets({ path -> runBlocking { clientNoDate.get(path) } }, "album-1")
             }
         }
+    }
+
+    @Test
+    fun testResolveInputPathFallback() {
+        // When file does not exist, absolute path is preserved and relative path gets baseDir prefix
+        val absPath = "/data/library/user/photo.jpg"
+        assertEquals(absPath, resolveInputPath(absPath))
+
+        val relPath = "upload/user/photo.jpg"
+        assertEquals("/data/$relPath", resolveInputPath(relPath))
     }
 
     @Test
