@@ -264,13 +264,33 @@ fun runJob(
 ): Unit = runJob({ path, _ -> fetch(path) }, albumId, resolution, quality, frameoHosts)
 
 fun main() = SuspendApp {
-    val immichUrl = env("IMMICH_URL") ?: throw Throwable("Immich URL not found")
-    val immichAlbumId = env("IMMICH_ALBUM_ID") ?: throw Throwable("Album ID not found")
-    val immichApiKey = env("IMMICH_API_KEY") ?: throw Throwable("API key not found")
+    val rawImmichUrl = env("IMMICH_URL")
+    if (rawImmichUrl.isNullOrBlank()) {
+        println("Error: IMMICH_URL environment variable is required")
+        return@SuspendApp
+    }
+    val immichUrl = rawImmichUrl.trimEnd('/')
+
+    val immichAlbumId = env("IMMICH_ALBUM_ID")
+    if (immichAlbumId.isNullOrBlank()) {
+        println("Error: IMMICH_ALBUM_ID environment variable is required")
+        return@SuspendApp
+    }
+
+    val immichApiKey = env("IMMICH_API_KEY")
+    if (immichApiKey.isNullOrBlank()) {
+        println("Error: IMMICH_API_KEY environment variable is required")
+        return@SuspendApp
+    }
+
     val resolution = env("RESOLUTION") ?: "1920x1280"
     val jpegQuality = env("JPEG_QUALITY") ?: "99%"
 
     val home = env("HOME")
+    if (home.isNullOrBlank()) {
+        println("Error: HOME environment variable is not set")
+        return@SuspendApp
+    }
     val sshConfigPath = "$home/.ssh/config".toPath()
     if (FileSystem.SYSTEM.metadataOrNull(sshConfigPath) == null) {
         println("SSH config file not found in $sshConfigPath")
@@ -279,6 +299,9 @@ fun main() = SuspendApp {
 
     val sshConfig = FileSystem.SYSTEM.read(sshConfigPath) { readUtf8() }
     val frameoHosts = parseFrameoHosts(sshConfig)
+    if (frameoHosts.isEmpty()) {
+        println("Warning: No frameo hosts found in $sshConfigPath")
+    }
 
     val client = HttpClient(Curl)
 
