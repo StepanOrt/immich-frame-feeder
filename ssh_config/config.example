@@ -1,0 +1,13 @@
+Host frameo_living_room
+    User u0_a100
+    HostName 192.168.1.50
+    Port 8022
+    IdentityFile ~/.ssh/id_frameo
+    ConnectTimeout 5
+
+Host frameo_bedroom
+    User u0_a100
+    HostName 192.168.1.51
+    Port 8022
+    IdentityFile ~/.ssh/id_frameo
+    ConnectTimeout 5

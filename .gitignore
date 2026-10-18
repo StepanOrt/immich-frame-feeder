@@ -1,0 +1,20 @@
+# Gradle
+.gradle/
+build/
+
+# IDE & Editor
+.idea/
+*.iml
+.vscode/
+
+# Build artifacts
+*.kexe
+*.klib
+bin/
+
+# Environment secrets
+.env
+
+# SSH Configuration & Keys
+ssh_config/*
+!ssh_config/config.example

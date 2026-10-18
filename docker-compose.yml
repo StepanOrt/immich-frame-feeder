@@ -1,0 +1,18 @@
+services:
+  frameo:
+    restart: unless-stopped
+    container_name: frameo
+    image: frameo
+    build:
+      dockerfile: Dockerfile
+      context: .
+    environment:
+      IMMICH_URL: ${IMMICH_URL}
+      IMMICH_ALBUM_ID: ${IMMICH_ALBUM_ID}
+      IMMICH_API_KEY: ${IMMICH_API_KEY}
+      RESOLUTION: ${RESOLUTION:-1920x1280}
+      JPEG_QUALITY: ${JPEG_QUALITY:-99%}
+    volumes:
+      - ./ssh_config:/root/.ssh:ro
+      - ${IMMICH_LIBRARY_PATH:-/mnt/pool/immich/library}:/data/upload
+      - ${FOTO_LIBRARY_PATH:-/mnt/pool/foto}:/data/foto:ro
