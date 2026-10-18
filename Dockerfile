@@ -6,5 +6,5 @@ RUN apt-get update && apt-get install -y \
     imagemagick \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --chmod=700 KotlinNativeTemplate.kexe /application
+COPY --chmod=700 ImmichFrameFeeder.kexe /application
 CMD ["/application"]

@@ -73,4 +73,4 @@ Requirements:
 ```bash
 ./gradlew linkReleaseExecutableNative
 ```
-The compiled binary will be placed at `build/bin/native/KotlinNativeTemplateReleaseExecutable/KotlinNativeTemplate.kexe`.
+The compiled binary will be placed at `build/bin/native/ImmichFrameFeederReleaseExecutable/ImmichFrameFeeder.kexe`.
