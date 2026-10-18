@@ -20,7 +20,7 @@ kotlin {
         all {
             languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
         }
-        val nativeMain by getting {
+        getByName("nativeMain") {
             dependencies {
                 implementation("io.arrow-kt:suspendapp:2.2.3")
                 implementation("com.kgit2:kommand:2.3.0")
@@ -31,7 +31,7 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
             }
         }
-        val nativeTest by getting {
+        getByName("nativeTest") {
             dependencies {
                 implementation(kotlin("test"))
                 implementation("io.ktor:ktor-client-mock:3.6.0")
