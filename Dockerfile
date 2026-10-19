@@ -17,8 +17,11 @@ RUN if [ -f /etc/ImageMagick-6/policy.xml ]; then \
       sed -i '/<\/policymap>/i \  <policy domain="coder" rights="none" pattern="{TEXT,SHOW,WIN,PLT,MSL,MVG,EPHEMERAL,URL,HTTPS,HTTP,FTP}" />' /etc/ImageMagick-6/policy.xml; \
     fi
 
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh
+
 COPY ImmichFrameFeeder.kexe /application
 RUN chmod 755 /application
 
-USER appuser
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/application"]

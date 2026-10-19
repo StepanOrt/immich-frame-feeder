@@ -44,6 +44,17 @@ jobs:
           ./gradlew linkReleaseExecutableNative
           cp build/bin/native/ImmichFrameFeederReleaseExecutable/ImmichFrameFeeder.kexe ./ImmichFrameFeeder.kexe
 
+      - name: Smoke test container image
+        run: |
+          docker build -t frameo-smoke-test:local .
+          mkdir -p test_ssh
+          printf "Host frameo_test\n  HostName 127.0.0.1\n  IdentityFile ~/.ssh/id_test\n" > test_ssh/config
+          printf "dummy-key-data\n" > test_ssh/id_test
+          chmod 600 test_ssh/id_test
+          chmod 644 test_ssh/config
+          docker run --rm -v "$(pwd)/test_ssh:/config/ssh:ro" frameo-smoke-test:local ssh -G frameo_test
+          rm -rf test_ssh
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
 

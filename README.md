@@ -55,13 +55,10 @@ Host frameo*
 > ```bash
 > ssh-keyscan -p 8022 192.168.1.50 192.168.1.51 >> ssh_config/known_hosts
 > ```
->
-> **Permissions & Non-Root User**: The container runs as non-root user `appuser` (UID 1000). Ensure the mounted files are readable by UID 1000:
+> **Permissions**: `./ssh_config` is mounted into the container at `/config/ssh:ro`. The container entrypoint automatically installs and sets up correct permissions (`0600` for keys, `0644` for config/known_hosts) in `appuser`'s home directory before dropping privileges to non-root `appuser`. This works seamlessly on standard Docker, rootless Docker, and Podman.
+> Ensure your private key on the host is not world-readable:
 > ```bash
 > chmod 600 ssh_config/id_frameo
-> chmod 644 ssh_config/config ssh_config/known_hosts
-> # If your host user UID is not 1000:
-> chown -R 1000:1000 ssh_config/
 > ```
 
 ### 2. Configure Environment
