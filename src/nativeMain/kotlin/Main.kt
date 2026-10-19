@@ -123,11 +123,6 @@ suspend fun getImmichAssets(
     }
 }
 
-suspend fun getImmichAssets(
-    fetch: (String) -> HttpResponse,
-    albumId: String
-): List<Pair<String, String>> = getImmichAssets({ path, _ -> fetch(path) }, albumId)
-
 private val SshDefaultArgs = listOf(
     "-o", "BatchMode=yes",
     "-o", "ServerAliveInterval=15",
@@ -270,7 +265,12 @@ fun runJob(
             FileSystem.SYSTEM.delete(tmpOutputPath.toPath(), mustExist = false)
             FileSystem.SYSTEM.delete(outputPath.toPath(), mustExist = false)
 
-            val resizeArg = if (resolution.endsWith(">")) resolution else "${resolution}^>"
+            val resizeArg = when {
+                resolution.endsWith("^>") -> resolution
+                resolution.endsWith(">") -> resolution
+                resolution.endsWith("^") -> "${resolution}>"
+                else -> "${resolution}^>"
+            }
             val convertStatus = processRunner.run(
                 "convert",
                 listOf(inputPath, "-auto-orient", "-strip", "-resize", resizeArg, "-quality", quality, tmpOutputPath)

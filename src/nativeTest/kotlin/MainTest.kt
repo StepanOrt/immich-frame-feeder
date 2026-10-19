@@ -243,8 +243,8 @@ class MainTest {
                 }
             }
 
-            val fetch: (String) -> HttpResponse = { path ->
-                runBlocking { client.get(path) }
+            val fetch: suspend (String, String?) -> HttpResponse = { path, _ ->
+                client.get(path)
             }
 
             val assets = getImmichAssets(fetch, "album-123")
@@ -272,8 +272,8 @@ class MainTest {
                 }
             }
 
-            val fetch: (String) -> HttpResponse = { path ->
-                runBlocking { client.get(path) }
+            val fetch: suspend (String, String?) -> HttpResponse = { path, _ ->
+                client.get(path)
             }
 
             val ex = assertFailsWith<IllegalStateException> {
@@ -304,7 +304,7 @@ class MainTest {
                 {"id": "11111111-1111-1111-1111-111111111111", "type": "IMAGE", "fileCreatedAt": "2023-01-02", "originalPath": "p2"}
             ]}"""
             val clientNoId = makeClient(noId)
-            val resultNoId = getImmichAssets({ path -> runBlocking { clientNoId.get(path) } }, "album-1")
+            val resultNoId = getImmichAssets({ path, _ -> clientNoId.get(path) }, "album-1")
             assertEquals(1, resultNoId.size)
             assertEquals(Pair("11111111-1111-1111-1111-111111111111", "p2"), resultNoId[0])
 
@@ -314,7 +314,7 @@ class MainTest {
                 {"id": "22222222-2222-2222-2222-222222222222", "type": "IMAGE", "fileCreatedAt": "2023-01-02", "originalPath": "valid"}
             ]}"""
             val clientNoPath = makeClient(noPath)
-            val resultNoPath = getImmichAssets({ path -> runBlocking { clientNoPath.get(path) } }, "album-1")
+            val resultNoPath = getImmichAssets({ path, _ -> clientNoPath.get(path) }, "album-1")
             assertEquals(1, resultNoPath.size)
             assertEquals(Pair("22222222-2222-2222-2222-222222222222", "valid"), resultNoPath[0])
 
@@ -324,7 +324,7 @@ class MainTest {
                 {"id": "22222222-2222-2222-2222-222222222222", "type": "IMAGE", "fileCreatedAt": "2023-01-02", "originalPath": "p2"}
             ]}"""
             val clientNoDate = makeClient(noDate)
-            val resultNoDate = getImmichAssets({ path -> runBlocking { clientNoDate.get(path) } }, "album-1")
+            val resultNoDate = getImmichAssets({ path, _ -> clientNoDate.get(path) }, "album-1")
             assertEquals(2, resultNoDate.size)
         }
     }
@@ -347,7 +347,7 @@ class MainTest {
                     }
                 }
             }
-            val assets = getImmichAssets({ path -> runBlocking { client.get(path) } }, "album-1")
+            val assets = getImmichAssets({ path, _ -> client.get(path) }, "album-1")
             assertEquals(1, assets.size)
             assertEquals("11111111-1111-1111-1111-111111111111", assets[0].first)
         }
@@ -615,6 +615,7 @@ class MainTest {
             // Check convert args
             val convertArgs = runner.executedCommands[1].second
             assertTrue(convertArgs.contains("$testBase/photo.jpg"))
+            assertTrue(convertArgs.contains("1920x1080^>"))
             assertTrue(convertArgs.contains("/tmp/$assetUuid.tmp.jpg"))
 
             // Check scp args
