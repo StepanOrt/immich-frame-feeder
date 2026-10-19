@@ -7,6 +7,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okio.FileSystem
+import okio.Path.Companion.toPath
 import kotlin.test.*
 
 class MainTest {
@@ -434,8 +436,13 @@ class MainTest {
             "frameo1" to listOf("11111111-1111-1111-1111-111111111111")
         )
         val immichAssetIds = emptyList<String>()
-        removeOldPictures(remoteAssets, immichAssetIds, runner)
+        // Blocked when allowEmptyAlbum = false
+        removeOldPictures(remoteAssets, immichAssetIds, runner, allowEmptyAlbum = false)
         assertTrue(runner.executedCommands.isEmpty(), "Empty album must block deletion by default")
+
+        // Allowed when allowEmptyAlbum = true and allowMassDelete = true
+        removeOldPictures(remoteAssets, immichAssetIds, runner, allowEmptyAlbum = true, allowMassDelete = true)
+        assertEquals(1, runner.executedCommands.size, "Empty album must allow deletion when overrides are set")
     }
 
     @Test
@@ -450,15 +457,20 @@ class MainTest {
         )
         // Only 1 of 3 assets kept -> 2/3 deleted (>50%)
         val immichAssetIds = listOf("11111111-1111-1111-1111-111111111111")
-        removeOldPictures(remoteAssets, immichAssetIds, runner)
+        // Blocked when allowMassDelete = false
+        removeOldPictures(remoteAssets, immichAssetIds, runner, allowMassDelete = false)
         assertTrue(runner.executedCommands.isEmpty(), "Mass delete (>50%) must be blocked by safety guard")
+
+        // Allowed when allowMassDelete = true
+        removeOldPictures(remoteAssets, immichAssetIds, runner, allowMassDelete = true)
+        assertEquals(1, runner.executedCommands.size, "Mass delete must proceed when override is set")
     }
 
     @Test
     fun testRunJobUnreachableHostSkipped() {
         val runner = FakeProcessRunner()
         val assetUuid = "11111111-1111-1111-1111-111111111111"
-        val mockJson = """{"assets": [{"id": "$assetUuid", "type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "p1"}]}"""
+        val mockJson = """{"assets": [{"id": "$assetUuid", "type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "photo.jpg"}]}"""
 
         val client = HttpClient(MockEngine) {
             engine {
@@ -469,29 +481,43 @@ class MainTest {
         }
         val fetch: suspend (String, String?) -> HttpResponse = { path, _ -> client.get(path) }
 
-        // Host listing fails with exit code 255 (unreachable)
-        runner.exitCode = 255
+        val testBase = "/tmp/test_immich_unreachable"
+        val testFile = "$testBase/photo.jpg".toPath()
+        FileSystem.SYSTEM.createDirectories(testBase.toPath())
+        FileSystem.SYSTEM.write(testFile) { writeUtf8("dummy") }
 
-        runJob(
-            fetch = fetch,
-            albumId = "album-1",
-            resolution = "1920x1080",
-            quality = "90%",
-            frameoHosts = listOf("frameo-offline"),
-            processRunner = runner
-        )
+        try {
+            // Host listing fails with exit code 255 (unreachable)
+            runner.handler = { cmd, args ->
+                if (cmd == "ssh" && args.any { it.startsWith("ls ") }) Pair(255, "Connection refused")
+                else Pair(0, "")
+            }
 
-        // Only the ls command should have been attempted, no convert or scp
-        assertEquals(1, runner.executedCommands.size)
-        assertEquals("ssh", runner.executedCommands[0].first)
-        assertTrue(runner.executedCommands[0].second.any { it.contains("ls /data/data") })
+            runJob(
+                fetch = fetch,
+                albumId = "album-1",
+                resolution = "1920x1080",
+                quality = "90%",
+                frameoHosts = listOf("frameo-offline"),
+                processRunner = runner,
+                baseDir = testBase
+            )
+
+            // Only the ls command should have been attempted, no convert or scp
+            assertEquals(1, runner.executedCommands.size)
+            assertEquals("ssh", runner.executedCommands[0].first)
+            assertTrue(runner.executedCommands[0].second.any { it.contains("ls /data/data") })
+        } finally {
+            FileSystem.SYSTEM.delete(testFile, mustExist = false)
+            FileSystem.SYSTEM.delete(testBase.toPath(), mustExist = false)
+        }
     }
 
     @Test
     fun testRunJobSkipsExistingAssetsOnFrame() {
         val runner = FakeProcessRunner()
         val assetUuid = "11111111-1111-1111-1111-111111111111"
-        val mockJson = """{"assets": [{"id": "$assetUuid", "type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "p1"}]}"""
+        val mockJson = """{"assets": [{"id": "$assetUuid", "type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "photo.jpg"}]}"""
 
         val client = HttpClient(MockEngine) {
             engine {
@@ -502,38 +528,188 @@ class MainTest {
         }
         val fetch: suspend (String, String?) -> HttpResponse = { path, _ -> client.get(path) }
 
-        runner.exitCode = 0
-        runner.outputByCommand["ssh -F ssh_config/config -q -o BatchMode=yes frameo1 ls /data/data/com.termux/files/home/storage/dcim/"] =
-            Pair(0, "$assetUuid.jpg\n")
+        val testBase = "/tmp/test_immich_existing"
+        val testFile = "$testBase/photo.jpg".toPath()
+        FileSystem.SYSTEM.createDirectories(testBase.toPath())
+        FileSystem.SYSTEM.write(testFile) { writeUtf8("dummy") }
 
-        runJob(
-            fetch = fetch,
-            albumId = "album-1",
-            resolution = "1920x1080",
-            quality = "90%",
-            frameoHosts = listOf("frameo1"),
-            processRunner = runner
-        )
+        try {
+            runner.handler = { cmd, args ->
+                if (cmd == "ssh" && args.any { it.startsWith("ls ") }) {
+                    Pair(0, "$assetUuid.jpg\n")
+                } else {
+                    Pair(0, "")
+                }
+            }
 
-        // Only the ls command should have been attempted, no scp or convert
-        assertEquals(1, runner.executedCommands.size)
-        assertEquals("ssh", runner.executedCommands[0].first)
+            runJob(
+                fetch = fetch,
+                albumId = "album-1",
+                resolution = "1920x1080",
+                quality = "90%",
+                frameoHosts = listOf("frameo1"),
+                processRunner = runner,
+                baseDir = testBase
+            )
+
+            // Only the ls command should have been attempted; since photo exists on host, no convert or scp
+            assertEquals(1, runner.executedCommands.size)
+            assertEquals("ssh", runner.executedCommands[0].first)
+            assertTrue(runner.executedCommands[0].second.any { it.contains("ls /data/data") })
+        } finally {
+            FileSystem.SYSTEM.delete(testFile, mustExist = false)
+            FileSystem.SYSTEM.delete(testBase.toPath(), mustExist = false)
+        }
+    }
+
+    @Test
+    fun testRunJobPushesMissingAssetFullPipeline() {
+        val runner = FakeProcessRunner()
+        val assetUuid = "11111111-1111-1111-1111-111111111111"
+        val mockJson = """{"assets": [{"id": "$assetUuid", "type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "photo.jpg"}]}"""
+
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler {
+                    respond(mockJson, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+            }
+        }
+        val fetch: suspend (String, String?) -> HttpResponse = { path, _ -> client.get(path) }
+
+        val testBase = "/tmp/test_immich_pipeline"
+        val testFile = "$testBase/photo.jpg".toPath()
+        FileSystem.SYSTEM.createDirectories(testBase.toPath())
+        FileSystem.SYSTEM.write(testFile) { writeUtf8("dummy image content") }
+
+        try {
+            runner.handler = { cmd, args ->
+                when {
+                    cmd == "ssh" && args.any { it.startsWith("ls ") } -> Pair(0, "") // Host has no assets
+                    cmd == "convert" -> {
+                        // Simulate convert writing output
+                        val tmpOut = args.last()
+                        FileSystem.SYSTEM.write(tmpOut.toPath()) { writeUtf8("converted-jpeg") }
+                        Pair(0, "")
+                    }
+                    cmd == "scp" -> Pair(0, "")
+                    cmd == "ssh" && args.any { it.contains("mv ") } -> Pair(0, "")
+                    else -> Pair(0, "")
+                }
+            }
+
+            runJob(
+                fetch = fetch,
+                albumId = "album-1",
+                resolution = "1920x1080",
+                quality = "90%",
+                frameoHosts = listOf("frameo1"),
+                processRunner = runner,
+                baseDir = testBase
+            )
+
+            // Pipeline executed: ls -> convert -> scp -> ssh mv
+            val commands = runner.executedCommands.map { it.first }
+            assertEquals(listOf("ssh", "convert", "scp", "ssh"), commands)
+
+            // Check convert args
+            val convertArgs = runner.executedCommands[1].second
+            assertTrue(convertArgs.contains("$testBase/photo.jpg"))
+            assertTrue(convertArgs.contains("/tmp/$assetUuid.tmp.jpg"))
+
+            // Check scp args
+            val scpArgs = runner.executedCommands[2].second
+            assertTrue(scpArgs.contains("/tmp/$assetUuid.jpg"))
+            assertTrue(scpArgs.any { it.contains("frameo1:/data/data/") && it.contains("$assetUuid.jpg.part") })
+
+            // Check mv args
+            val mvArgs = runner.executedCommands[3].second
+            assertTrue(mvArgs.any { it.contains("mv ") && it.contains("$assetUuid.jpg.part") && it.contains("$assetUuid.jpg") })
+
+            // Verify temporary files are cleaned up afterwards
+            assertNull(FileSystem.SYSTEM.metadataOrNull("/tmp/$assetUuid.tmp.jpg".toPath()))
+            assertNull(FileSystem.SYSTEM.metadataOrNull("/tmp/$assetUuid.jpg".toPath()))
+        } finally {
+            FileSystem.SYSTEM.delete(testFile, mustExist = false)
+            FileSystem.SYSTEM.delete(testBase.toPath(), mustExist = false)
+            FileSystem.SYSTEM.delete("/tmp/$assetUuid.tmp.jpg".toPath(), mustExist = false)
+            FileSystem.SYSTEM.delete("/tmp/$assetUuid.jpg".toPath(), mustExist = false)
+        }
+    }
+
+    @Test
+    fun testRunJobConvertFailureCleansUpAndDoesNotPush() {
+        val runner = FakeProcessRunner()
+        val assetUuid = "11111111-1111-1111-1111-111111111111"
+        val mockJson = """{"assets": [{"id": "$assetUuid", "type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "photo.jpg"}]}"""
+
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler {
+                    respond(mockJson, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+            }
+        }
+        val fetch: suspend (String, String?) -> HttpResponse = { path, _ -> client.get(path) }
+
+        val testBase = "/tmp/test_immich_convert_fail"
+        val testFile = "$testBase/photo.jpg".toPath()
+        FileSystem.SYSTEM.createDirectories(testBase.toPath())
+        FileSystem.SYSTEM.write(testFile) { writeUtf8("dummy image content") }
+
+        try {
+            runner.handler = { cmd, args ->
+                when {
+                    cmd == "ssh" && args.any { it.startsWith("ls ") } -> Pair(0, "")
+                    cmd == "convert" -> {
+                        // Simulate failed conversion leaving partial output
+                        val tmpOut = args.last()
+                        FileSystem.SYSTEM.write(tmpOut.toPath()) { writeUtf8("partial output") }
+                        Pair(1, "OOM / convert failed")
+                    }
+                    else -> Pair(0, "")
+                }
+            }
+
+            runJob(
+                fetch = fetch,
+                albumId = "album-1",
+                resolution = "1920x1080",
+                quality = "90%",
+                frameoHosts = listOf("frameo1"),
+                processRunner = runner,
+                baseDir = testBase
+            )
+
+            // Should have executed ls, then convert failed, so NO scp and NO mv
+            val commands = runner.executedCommands.map { it.first }
+            assertEquals(listOf("ssh", "convert"), commands)
+
+            // Verify temporary partial file was cleaned up by finally
+            assertNull(FileSystem.SYSTEM.metadataOrNull("/tmp/$assetUuid.tmp.jpg".toPath()))
+            assertNull(FileSystem.SYSTEM.metadataOrNull("/tmp/$assetUuid.jpg".toPath()))
+        } finally {
+            FileSystem.SYSTEM.delete(testFile, mustExist = false)
+            FileSystem.SYSTEM.delete(testBase.toPath(), mustExist = false)
+            FileSystem.SYSTEM.delete("/tmp/$assetUuid.tmp.jpg".toPath(), mustExist = false)
+            FileSystem.SYSTEM.delete("/tmp/$assetUuid.jpg".toPath(), mustExist = false)
+        }
     }
 }
 
 class FakeProcessRunner : ProcessRunner {
     val executedCommands = mutableListOf<Pair<String, List<String>>>()
-    var exitCode: Int = 0
-    val outputByCommand = mutableMapOf<String, Pair<Int, String>>()
+    var defaultExitCode: Int = 0
+    var defaultOutput: String = ""
+    var handler: ((command: String, args: List<String>) -> Pair<Int, String>)? = null
 
     override fun run(command: String, args: List<String>): Int {
         executedCommands.add(command to args)
-        return exitCode
+        return handler?.invoke(command, args)?.first ?: defaultExitCode
     }
 
     override fun runWithOutput(command: String, args: List<String>): Pair<Int, String> {
         executedCommands.add(command to args)
-        val key = "$command ${args.joinToString(" ")}"
-        return outputByCommand[key] ?: Pair(exitCode, "")
+        return handler?.invoke(command, args) ?: Pair(defaultExitCode, defaultOutput)
     }
 }

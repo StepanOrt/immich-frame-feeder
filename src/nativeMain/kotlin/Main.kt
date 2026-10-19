@@ -158,11 +158,11 @@ object SystemProcessRunner : ProcessRunner {
 fun removeOldPictures(
     remoteAssetsByHost: Map<String, List<String>>,
     immichAssetIds: List<String>,
-    processRunner: ProcessRunner = SystemProcessRunner
+    processRunner: ProcessRunner = SystemProcessRunner,
+    allowEmptyAlbum: Boolean = env("ALLOW_EMPTY_ALBUM")?.equals("true", ignoreCase = true) == true,
+    allowMassDelete: Boolean = env("ALLOW_MASS_DELETE")?.equals("true", ignoreCase = true) == true
 ) {
     val immichSet = immichAssetIds.toSet()
-    val allowEmptyAlbum = env("ALLOW_EMPTY_ALBUM")?.equals("true", ignoreCase = true) == true
-    val allowMassDelete = env("ALLOW_MASS_DELETE")?.equals("true", ignoreCase = true) == true
 
     if (immichAssetIds.isEmpty() && !allowEmptyAlbum) {
         println("Warning: Immich returned 0 assets for album. Skipping deletion to prevent accidental wipe. (Set ALLOW_EMPTY_ALBUM=true to override)")
@@ -205,7 +205,8 @@ fun runJob(
     resolution: String,
     quality: String,
     frameoHosts: List<String>,
-    processRunner: ProcessRunner = SystemProcessRunner
+    processRunner: ProcessRunner = SystemProcessRunner,
+    baseDir: String = "/data"
 ) {
     val immichAssets = runBlocking {
         getImmichAssets(fetch, albumId)
@@ -260,7 +261,7 @@ fun runJob(
         val tmpOutputPath = "/tmp/$id.tmp.jpg"
         val outputPath = "/tmp/$id.jpg"
         try {
-            val inputPath = resolveInputPath(originalPath)
+            val inputPath = resolveInputPath(originalPath, baseDir = baseDir)
             if (FileSystem.SYSTEM.metadataOrNull(inputPath.toPath()) == null) {
                 println("Input file $inputPath doesn't exist")
                 continue
