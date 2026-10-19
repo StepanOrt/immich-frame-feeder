@@ -354,11 +354,12 @@ class MainTest {
     @Test
     fun testResolveInputPathFallback() {
         // When file does not exist, absolute path starting with baseDir is preserved and relative path gets baseDir prefix
-        val absPath = "/data/library/user/photo.jpg"
-        assertEquals(absPath, resolveInputPath(absPath))
+        val testBase = "/nonexistent_test_base"
+        val absPath = "$testBase/library/user/photo.jpg"
+        assertEquals(absPath, resolveInputPath(absPath, baseDir = testBase))
 
         val relPath = "upload/user/photo.jpg"
-        assertEquals("/data/$relPath", resolveInputPath(relPath))
+        assertEquals("$testBase/$relPath", resolveInputPath(relPath, baseDir = testBase))
     }
 
     @Test
@@ -474,6 +475,39 @@ class MainTest {
         assertEquals(1, runner.executedCommands.size)
         assertEquals("ssh", runner.executedCommands[0].first)
         assertTrue(runner.executedCommands[0].second.any { it.contains("ls /data/data") })
+    }
+
+    @Test
+    fun testRunJobSkipsExistingAssetsOnFrame() {
+        val runner = FakeProcessRunner()
+        val assetUuid = "11111111-1111-1111-1111-111111111111"
+        val mockJson = """{"assets": [{"id": "$assetUuid", "type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "p1"}]}"""
+
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler {
+                    respond(mockJson, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+            }
+        }
+        val fetch: suspend (String, String?) -> HttpResponse = { path, _ -> client.get(path) }
+
+        runner.exitCode = 0
+        runner.outputByCommand["ssh -F ssh_config/config -q -o BatchMode=yes frameo1 ls /data/data/com.termux/files/home/storage/dcim/"] =
+            Pair(0, "$assetUuid.jpg\n")
+
+        runJob(
+            fetch = fetch,
+            albumId = "album-1",
+            resolution = "1920x1080",
+            quality = "90%",
+            frameoHosts = listOf("frameo1"),
+            processRunner = runner
+        )
+
+        // Only the ls command should have been attempted, no scp or convert
+        assertEquals(1, runner.executedCommands.size)
+        assertEquals("ssh", runner.executedCommands[0].first)
     }
 }
 
