@@ -3,6 +3,7 @@ import com.kgit2.kommand.process.Command
 import com.kgit2.kommand.process.Stdio
 import io.ktor.client.*
 import io.ktor.client.engine.curl.*
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -327,7 +328,13 @@ fun main() = SuspendApp {
         println("Warning: No frameo hosts found in $sshConfigPath")
     }
 
-    val client = HttpClient(Curl)
+    val client = HttpClient(Curl) {
+        install(HttpTimeout) {
+            requestTimeoutMillis = 60_000
+            connectTimeoutMillis = 15_000
+            socketTimeoutMillis = 60_000
+        }
+    }
 
     val fetch: suspend (String, String?) -> HttpResponse = { path, body ->
         if (body != null) {
@@ -355,7 +362,8 @@ fun main() = SuspendApp {
             println("Job cancelled")
             throw e
         } catch (e: Throwable) {
-            println("Error in job execution: ${e.message}")
+            println("Error in job execution (${e::class.simpleName ?: "Throwable"}): ${e.message}")
+            println(e.stackTraceToString())
         }
         val waitTime = pollDuration - timeMark.elapsedNow()
         if (waitTime.isPositive()) {
