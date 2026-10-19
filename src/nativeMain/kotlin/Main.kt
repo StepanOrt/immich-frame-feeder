@@ -13,7 +13,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import okio.FileSystem
 import okio.Path.Companion.toPath
-import platform.posix.exit
 import platform.posix.getenv
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -28,8 +27,9 @@ fun parseFrameoHosts(sshConfig: String): List<String> =
         }
         .filter { it.startsWith("frameo") && !it.contains("*") && !it.contains("?") }
 
-val PrettyPrintJson = Json {
-    prettyPrint = true
+val JsonDecoder = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
 }
 
 fun env(name: String): String? = getenv(name)?.toKString()
@@ -42,7 +42,7 @@ suspend fun HttpResponse.checkSuccess(): HttpResponse {
 }
 
 suspend fun HttpResponse.parseJson(): JsonElement =
-    PrettyPrintJson.decodeFromString(bodyAsText())
+    JsonDecoder.decodeFromString(bodyAsText())
 
 fun resolveInputPath(originalPath: String, baseDir: String = "/data"): String {
     if (originalPath.contains("..") || originalPath.contains(":")) {
@@ -298,14 +298,6 @@ fun runJob(
     removeOldPictures(remoteAssetsByHost, immichAssetIds)
 }
 
-fun runJob(
-    fetch: (String) -> HttpResponse,
-    albumId: String,
-    resolution: String,
-    quality: String,
-    frameoHosts: List<String>
-): Unit = runJob({ path, _ -> fetch(path) }, albumId, resolution, quality, frameoHosts)
-
 fun main() = SuspendApp {
     val rawImmichUrl = env("IMMICH_URL")
     if (rawImmichUrl.isNullOrBlank()) {
@@ -313,6 +305,13 @@ fun main() = SuspendApp {
         return@SuspendApp
     }
     val immichUrl = rawImmichUrl.trimEnd('/')
+    if (!immichUrl.startsWith("https://") && !immichUrl.startsWith("http://")) {
+        println("Error: IMMICH_URL must start with https:// or http://")
+        return@SuspendApp
+    }
+    if (immichUrl.startsWith("http://")) {
+        println("Warning: IMMICH_URL is using unencrypted HTTP protocol; API key will be sent in plaintext")
+    }
 
     val immichAlbumId = env("IMMICH_ALBUM_ID")
     if (immichAlbumId.isNullOrBlank()) {

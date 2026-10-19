@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmagickcore-6.q16-6-extra \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+# Note: libcurl4-gnutls-dev provides the libcurl.so shared library required by ktor-client-curl on Linux X64
 
 RUN groupadd -g 1000 appuser && \
     useradd -u 1000 -g appuser -d /home/appuser -m appuser
