@@ -2,6 +2,9 @@ Host frameo*
     StrictHostKeyChecking yes
     UserKnownHostsFile ~/.ssh/known_hosts
     ConnectTimeout 10
+    ControlMaster auto
+    ControlPath /tmp/ssh-%r@%h:%p
+    ControlPersist 60s
 
 Host frameo_living_room
     User u0_a100
