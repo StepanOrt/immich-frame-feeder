@@ -296,50 +296,58 @@ class MainTest {
                 }
             }
 
-            // Missing id
-            val noId = """{"assets": [{"type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "p"}]}"""
+            // Asset with missing id should be skipped, while valid asset is returned
+            val noId = """{"assets": [
+                {"type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "p1"},
+                {"id": "11111111-1111-1111-1111-111111111111", "type": "IMAGE", "fileCreatedAt": "2023-01-02", "originalPath": "p2"}
+            ]}"""
             val clientNoId = makeClient(noId)
-            assertFailsWith<IllegalStateException> {
-                getImmichAssets({ path -> runBlocking { clientNoId.get(path) } }, "album-1")
-            }
+            val resultNoId = getImmichAssets({ path -> runBlocking { clientNoId.get(path) } }, "album-1")
+            assertEquals(1, resultNoId.size)
+            assertEquals(Pair("11111111-1111-1111-1111-111111111111", "p2"), resultNoId[0])
 
-            // Missing originalPath
-            val noPath = """{"assets": [{"id": "11111111-1111-1111-1111-111111111111", "type": "IMAGE", "fileCreatedAt": "2023-01-01"}]}"""
+            // Asset with missing originalPath should be skipped, while valid asset is returned
+            val noPath = """{"assets": [
+                {"id": "11111111-1111-1111-1111-111111111111", "type": "IMAGE", "fileCreatedAt": "2023-01-01"},
+                {"id": "22222222-2222-2222-2222-222222222222", "type": "IMAGE", "fileCreatedAt": "2023-01-02", "originalPath": "valid"}
+            ]}"""
             val clientNoPath = makeClient(noPath)
-            assertFailsWith<IllegalStateException> {
-                getImmichAssets({ path -> runBlocking { clientNoPath.get(path) } }, "album-1")
-            }
+            val resultNoPath = getImmichAssets({ path -> runBlocking { clientNoPath.get(path) } }, "album-1")
+            assertEquals(1, resultNoPath.size)
+            assertEquals(Pair("22222222-2222-2222-2222-222222222222", "valid"), resultNoPath[0])
 
-            // Missing fileCreatedAt (requires at least 2 items to trigger sorting comparison)
+            // Missing fileCreatedAt should not throw and should default to empty string for sorting
             val noDate = """{"assets": [
                 {"id": "11111111-1111-1111-1111-111111111111", "type": "IMAGE", "originalPath": "p1"},
-                {"id": "22222222-2222-2222-2222-222222222222", "type": "IMAGE", "originalPath": "p2"}
+                {"id": "22222222-2222-2222-2222-222222222222", "type": "IMAGE", "fileCreatedAt": "2023-01-02", "originalPath": "p2"}
             ]}"""
             val clientNoDate = makeClient(noDate)
-            assertFailsWith<IllegalStateException> {
-                getImmichAssets({ path -> runBlocking { clientNoDate.get(path) } }, "album-1")
-            }
+            val resultNoDate = getImmichAssets({ path -> runBlocking { clientNoDate.get(path) } }, "album-1")
+            assertEquals(2, resultNoDate.size)
         }
     }
 
     @Test
-    fun testGetImmichAssetsInvalidUuidRejects() {
+    fun testGetImmichAssetsInvalidUuidSkipped() {
         runBlocking {
-            val invalidUuidJson = """{"assets": [{"id": "not-a-uuid", "type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "p"}]}"""
+            val json = """{"assets": [
+                {"id": "not-a-uuid", "type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "p1"},
+                {"id": "11111111-1111-1111-1111-111111111111", "type": "IMAGE", "fileCreatedAt": "2023-01-02", "originalPath": "p2"}
+            ]}"""
             val client = HttpClient(MockEngine) {
                 engine {
                     addHandler {
                         respond(
-                            content = invalidUuidJson,
+                            content = json,
                             status = HttpStatusCode.OK,
                             headers = headersOf(HttpHeaders.ContentType, "application/json")
                         )
                     }
                 }
             }
-            assertFailsWith<IllegalStateException> {
-                getImmichAssets({ path -> runBlocking { client.get(path) } }, "album-1")
-            }
+            val assets = getImmichAssets({ path -> runBlocking { client.get(path) } }, "album-1")
+            assertEquals(1, assets.size)
+            assertEquals("11111111-1111-1111-1111-111111111111", assets[0].first)
         }
     }
 

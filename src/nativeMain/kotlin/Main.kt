@@ -98,19 +98,21 @@ suspend fun getImmichAssets(
         it.jsonObject["type"]?.jsonPrimitive?.contentOrNull.equals("IMAGE", ignoreCase = true)
     }.sortedWith(
         compareBy {
-            it.jsonObject["fileCreatedAt"]?.jsonPrimitive?.contentOrNull
-                ?: throw IllegalStateException("Asset doesn't have fileCreatedAt")
+            it.jsonObject["fileCreatedAt"]?.jsonPrimitive?.contentOrNull ?: ""
         }
     ).reversed()
 
-    return images.map { asset ->
+    return images.mapNotNull { asset ->
         val id = asset.jsonObject["id"]?.jsonPrimitive?.contentOrNull
-            ?: throw IllegalStateException("Asset doesn't have id")
-        if (!id.matches(AssetIdRegex)) {
-            throw IllegalStateException("Asset id $id is not a valid UUID")
+        if (id == null || !id.matches(AssetIdRegex)) {
+            println("Skipping asset with invalid or missing UUID: $id")
+            return@mapNotNull null
         }
         val originalPath = asset.jsonObject["originalPath"]?.jsonPrimitive?.contentOrNull
-            ?: throw IllegalStateException("Asset doesn't have originalPath")
+        if (originalPath == null) {
+            println("Skipping asset $id with missing originalPath")
+            return@mapNotNull null
+        }
         Pair(id, originalPath)
     }
 }
