@@ -45,7 +45,7 @@ class MainTest {
 
     @Test
     fun testParseFrameoHostsEdgeCases() {
-        val sshConfig = "  Host\tframeo1\tframeo2\r\n\tHostName frameo-fake.lan\r\nHost frameo* other\r\n"
+        val sshConfig = "  Host\tframeo1\tframeo2 # frameo_commented\r\n\tHostName frameo-fake.lan\r\nHost frameo* other\r\n# Host frameo_disabled\r\n"
         assertEquals(listOf("frameo1", "frameo2"), parseFrameoHosts(sshConfig))
     }
 

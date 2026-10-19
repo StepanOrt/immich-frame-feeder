@@ -20,7 +20,7 @@ import kotlin.time.TimeSource
 
 fun parseFrameoHosts(sshConfig: String): List<String> =
     sshConfig.lines()
-        .map { it.trim() }
+        .map { it.substringBefore('#').trim() }
         .filter { it.matches(Regex("^(?i)Host\\s+.*")) }
         .flatMap { line ->
             line.split(Regex("\\s+")).drop(1)
@@ -228,9 +228,11 @@ fun runJob(
                 .filter { it.matches(AssetIdRegex) }
             if (staleParts.isNotEmpty()) {
                 println("Cleaning up ${staleParts.size} stale .part files on $host")
-                val filesToRemove = staleParts.map { "/data/data/com.termux/files/home/storage/dcim/$it.jpg.part" }
-                val rmPartCmd = "rm -f " + filesToRemove.joinToString(" ")
-                processRunner.run("ssh", SshDefaultArgs + listOf(host, rmPartCmd))
+                for (chunk in staleParts.chunked(100)) {
+                    val filesToRemove = chunk.map { "/data/data/com.termux/files/home/storage/dcim/$it.jpg.part" }
+                    val rmPartCmd = "rm -f " + filesToRemove.joinToString(" ")
+                    processRunner.run("ssh", SshDefaultArgs + listOf(host, rmPartCmd))
+                }
             }
         } else {
             println("Failed to list existing assets on $host; skipping host for this cycle")
