@@ -14,7 +14,7 @@ import kotlinx.serialization.json.*
 import okio.FileSystem
 import okio.Path.Companion.toPath
 import platform.posix.getenv
-import kotlin.time.Duration.Companion.minutes
+import kotlin.system.exitProcess
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -64,6 +64,7 @@ fun resolveInputPath(originalPath: String, baseDir: String = "/data"): String {
 
 val AssetIdRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 val ResolutionRegex = Regex("^\\d+x\\d+[\\^!<>]*$")
+val JpegQualityRegex = Regex("^([1-9]\\d?|100)%?$")
 
 suspend fun getImmichAssets(
     fetch: suspend (path: String, body: String?) -> HttpResponse,
@@ -320,12 +321,12 @@ fun main() = SuspendApp {
     val rawImmichUrl = env("IMMICH_URL")
     if (rawImmichUrl.isNullOrBlank()) {
         println("Error: IMMICH_URL environment variable is required")
-        return@SuspendApp
+        exitProcess(1)
     }
     val immichUrl = rawImmichUrl.trimEnd('/')
     if (!immichUrl.startsWith("https://") && !immichUrl.startsWith("http://")) {
         println("Error: IMMICH_URL must start with https:// or http://")
-        return@SuspendApp
+        exitProcess(1)
     }
     if (immichUrl.startsWith("http://")) {
         println("Warning: IMMICH_URL is using unencrypted HTTP protocol; API key will be sent in plaintext")
@@ -334,31 +335,35 @@ fun main() = SuspendApp {
     val immichAlbumId = env("IMMICH_ALBUM_ID")
     if (immichAlbumId.isNullOrBlank()) {
         println("Error: IMMICH_ALBUM_ID environment variable is required")
-        return@SuspendApp
+        exitProcess(1)
     }
 
     val immichApiKey = env("IMMICH_API_KEY")
     if (immichApiKey.isNullOrBlank()) {
         println("Error: IMMICH_API_KEY environment variable is required")
-        return@SuspendApp
+        exitProcess(1)
     }
 
     val resolution = env("RESOLUTION") ?: "1920x1280"
     if (!resolution.matches(ResolutionRegex)) {
         println("Error: Invalid RESOLUTION format '$resolution'. Expected format like '1920x1280'")
-        return@SuspendApp
+        exitProcess(1)
     }
     val jpegQuality = env("JPEG_QUALITY") ?: "99%"
+    if (!jpegQuality.matches(JpegQualityRegex)) {
+        println("Error: Invalid JPEG_QUALITY '$jpegQuality'. Expected 1-100 with optional '%'")
+        exitProcess(1)
+    }
 
     val home = env("HOME")
     if (home.isNullOrBlank()) {
         println("Error: HOME environment variable is not set")
-        return@SuspendApp
+        exitProcess(1)
     }
     val sshConfigPath = "$home/.ssh/config".toPath()
     if (FileSystem.SYSTEM.metadataOrNull(sshConfigPath) == null) {
         println("SSH config file not found in $sshConfigPath")
-        return@SuspendApp
+        exitProcess(1)
     }
 
     val sshConfig = FileSystem.SYSTEM.read(sshConfigPath) { readUtf8() }

@@ -61,6 +61,17 @@ class MainTest {
     }
 
     @Test
+    fun testJpegQualityRegexValidation() {
+        assertTrue("99%".matches(JpegQualityRegex))
+        assertTrue("90".matches(JpegQualityRegex))
+        assertTrue("1%".matches(JpegQualityRegex))
+        assertTrue("100%".matches(JpegQualityRegex))
+        assertFalse("0%".matches(JpegQualityRegex))
+        assertFalse("101%".matches(JpegQualityRegex))
+        assertFalse("bad".matches(JpegQualityRegex))
+    }
+
+    @Test
     fun testCheckSuccessValid() {
         runBlocking {
             val client = HttpClient(MockEngine) {
