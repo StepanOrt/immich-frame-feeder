@@ -407,6 +407,43 @@ class MainTest {
     }
 
     @Test
+    fun testResolveInputPathUploadLibraryMount() {
+        val testBase = "/tmp/test_resolve_upload_lib"
+        val targetDir = "$testBase/upload/library/caroline/2025/2025-08-09"
+        val targetFile = "$targetDir/PXL_20250809_104246485.jpg"
+        FileSystem.SYSTEM.createDirectories(targetDir.toPath())
+        FileSystem.SYSTEM.write(targetFile.toPath()) { writeUtf8("img") }
+        try {
+            val resolved = resolveInputPath(
+                "/data/library/caroline/2025/2025-08-09/PXL_20250809_104246485.jpg",
+                baseDir = testBase
+            )
+            assertEquals(targetFile, resolved)
+        } finally {
+            FileSystem.SYSTEM.deleteRecursively(testBase.toPath(), mustExist = false)
+        }
+    }
+
+    @Test
+    fun testResolveInputPathSkipsInaccessibleCandidateWhenLaterCandidateExists() {
+        val testBase = "/tmp/test_resolve_perm"
+        val blockedDir = "$testBase/library/stepan"
+        val validDir = "$testBase/upload/library/stepan/2025"
+        val validFile = "$validDir/photo.jpg"
+        FileSystem.SYSTEM.createDirectories(blockedDir.toPath())
+        FileSystem.SYSTEM.createDirectories(validDir.toPath())
+        FileSystem.SYSTEM.write(validFile.toPath()) { writeUtf8("img") }
+        platform.posix.chmod(blockedDir, 0u)
+        try {
+            val resolved = resolveInputPath("/data/library/stepan/2025/photo.jpg", baseDir = testBase)
+            assertEquals(validFile, resolved)
+        } finally {
+            platform.posix.chmod(blockedDir, 493u) // 0755
+            FileSystem.SYSTEM.deleteRecursively(testBase.toPath(), mustExist = false)
+        }
+    }
+
+    @Test
     fun testRemoveOldPicturesNoOldPicturesDoesNothing() {
         val runner = FakeProcessRunner()
         val remoteAssets = mapOf(

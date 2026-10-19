@@ -54,12 +54,27 @@ fun resolveInputPath(originalPath: String, baseDir: String = "/data"): String {
         if (originalPath.startsWith("$baseDir/")) originalPath else "$baseDir/$clean",
         "$baseDir/$clean",
         "$baseDir/${clean.removePrefix("data/")}",
+        "$baseDir/upload/${clean.removePrefix("data/")}",
         "$baseDir/upload/${clean.removePrefix("data/library/").removePrefix("library/")}",
         "$baseDir/upload/$clean",
         "$baseDir/foto/${clean.removePrefix("data/foto/").removePrefix("foto/")}"
     ).distinct()
-    return candidates.firstOrNull { FileSystem.SYSTEM.metadataOrNull(it.toPath()) != null }
-        ?: candidates.first()
+    var firstError: Exception? = null
+    for (candidate in candidates) {
+        try {
+            if (FileSystem.SYSTEM.metadataOrNull(candidate.toPath()) != null) {
+                return candidate
+            }
+        } catch (e: Exception) {
+            if (firstError == null) {
+                firstError = e
+            }
+        }
+    }
+    if (firstError != null) {
+        throw firstError
+    }
+    return candidates.first()
 }
 
 val AssetIdRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
