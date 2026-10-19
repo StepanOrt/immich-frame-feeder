@@ -137,7 +137,28 @@ private val ScpDefaultArgs = listOf(
     "-o", "BatchMode=yes"
 )
 
-fun removeOldPictures(remoteAssetsByHost: Map<String, List<String>>, immichAssetIds: List<String>) {
+interface ProcessRunner {
+    fun run(command: String, args: List<String>): Int
+    fun runWithOutput(command: String, args: List<String>): Pair<Int, String>
+}
+
+object SystemProcessRunner : ProcessRunner {
+    override fun run(command: String, args: List<String>): Int {
+        return Command(command).args(args).stdout(Stdio.Inherit).spawn().wait()
+    }
+
+    override fun runWithOutput(command: String, args: List<String>): Pair<Int, String> {
+        val child = Command(command).args(args).stdout(Stdio.Pipe).spawn()
+        val output = child.waitWithOutput()
+        return Pair(output.status ?: -1, output.stdout ?: "")
+    }
+}
+
+fun removeOldPictures(
+    remoteAssetsByHost: Map<String, List<String>>,
+    immichAssetIds: List<String>,
+    processRunner: ProcessRunner = SystemProcessRunner
+) {
     val immichSet = immichAssetIds.toSet()
     val allowEmptyAlbum = env("ALLOW_EMPTY_ALBUM")?.equals("true", ignoreCase = true) == true
     val allowMassDelete = env("ALLOW_MASS_DELETE")?.equals("true", ignoreCase = true) == true
@@ -163,11 +184,8 @@ fun removeOldPictures(remoteAssetsByHost: Map<String, List<String>>, immichAsset
             for (chunk in oldAssets.chunked(100)) {
                 val filesToRemove = chunk.map { "/data/data/com.termux/files/home/storage/dcim/$it.jpg" }
                 val rmCmd = "rm -f " + filesToRemove.joinToString(" ")
-                val child = Command("ssh")
-                    .args(SshDefaultArgs + listOf(host, rmCmd))
-                    .stdout(Stdio.Inherit)
-                    .spawn()
-                if (child.wait() != 0) {
+                val status = processRunner.run("ssh", SshDefaultArgs + listOf(host, rmCmd))
+                if (status != 0) {
                     allSucceeded = false
                 }
             }
@@ -185,7 +203,8 @@ fun runJob(
     albumId: String,
     resolution: String,
     quality: String,
-    frameoHosts: List<String>
+    frameoHosts: List<String>,
+    processRunner: ProcessRunner = SystemProcessRunner
 ) {
     val immichAssets = runBlocking {
         getImmichAssets(fetch, albumId)
@@ -193,13 +212,12 @@ fun runJob(
 
     val remoteAssetsByHost = mutableMapOf<String, List<String>>()
     for (host in frameoHosts) {
-        val child = Command("ssh")
-            .args(SshDefaultArgs + listOf(host, "ls /data/data/com.termux/files/home/storage/dcim/"))
-            .stdout(Stdio.Pipe)
-            .spawn()
-        val output = child.waitWithOutput()
-        if (output.status == 0) {
-            val lines = output.stdout?.split("\n") ?: emptyList()
+        val (status, stdout) = processRunner.runWithOutput(
+            "ssh",
+            SshDefaultArgs + listOf(host, "ls /data/data/com.termux/files/home/storage/dcim/")
+        )
+        if (status == 0) {
+            val lines = stdout.split("\n")
             val assets = lines
                 .filter { it.endsWith(".jpg") }
                 .map { it.removeSuffix(".jpg") }
@@ -213,11 +231,7 @@ fun runJob(
                 println("Cleaning up ${staleParts.size} stale .part files on $host")
                 val filesToRemove = staleParts.map { "/data/data/com.termux/files/home/storage/dcim/$it.jpg.part" }
                 val rmPartCmd = "rm -f " + filesToRemove.joinToString(" ")
-                Command("ssh")
-                    .args(SshDefaultArgs + listOf(host, rmPartCmd))
-                    .stdout(Stdio.Inherit)
-                    .spawn()
-                    .wait()
+                processRunner.run("ssh", SshDefaultArgs + listOf(host, rmPartCmd))
             }
         } else {
             println("Failed to list existing assets on $host; skipping host for this cycle")
@@ -255,12 +269,12 @@ fun runJob(
             FileSystem.SYSTEM.delete(outputPath.toPath(), mustExist = false)
 
             val resizeArg = if (resolution.endsWith(">")) resolution else "${resolution}^>"
-            val convertChild = Command("convert")
-                .args(listOf(inputPath, "-auto-orient", "-strip", "-resize", resizeArg, "-quality", quality, tmpOutputPath))
-                .stdout(Stdio.Inherit)
-                .spawn()
+            val convertStatus = processRunner.run(
+                "convert",
+                listOf(inputPath, "-auto-orient", "-strip", "-resize", resizeArg, "-quality", quality, tmpOutputPath)
+            )
 
-            if (convertChild.wait() != 0) {
+            if (convertStatus != 0) {
                 println("Failed to convert $inputPath")
                 continue
             }
@@ -272,18 +286,18 @@ fun runJob(
             for (host in targetHosts) {
                 val partPath = "/data/data/com.termux/files/home/storage/dcim/$id.jpg.part"
                 val finalPath = "/data/data/com.termux/files/home/storage/dcim/$id.jpg"
-                val scpChild = Command("scp")
-                    .args(ScpDefaultArgs + listOf(outputPath, "$host:$partPath"))
-                    .stdout(Stdio.Inherit)
-                    .spawn()
-                if (scpChild.wait() != 0) {
+                val scpStatus = processRunner.run(
+                    "scp",
+                    ScpDefaultArgs + listOf(outputPath, "$host:$partPath")
+                )
+                if (scpStatus != 0) {
                     println("Failed to push $outputPath to $host")
                 } else {
-                    val mvChild = Command("ssh")
-                        .args(SshDefaultArgs + listOf(host, "mv '$partPath' '$finalPath'"))
-                        .stdout(Stdio.Inherit)
-                        .spawn()
-                    if (mvChild.wait() != 0) {
+                    val mvStatus = processRunner.run(
+                        "ssh",
+                        SshDefaultArgs + listOf(host, "mv '$partPath' '$finalPath'")
+                    )
+                    if (mvStatus != 0) {
                         println("Failed to finalize $id.jpg on $host")
                     }
                 }
@@ -295,7 +309,7 @@ fun runJob(
     }
 
     val immichAssetIds = immichAssets.map { it.first }
-    removeOldPictures(remoteAssetsByHost, immichAssetIds)
+    removeOldPictures(remoteAssetsByHost, immichAssetIds, processRunner)
 }
 
 fun main() = SuspendApp {

@@ -373,42 +373,63 @@ class MainTest {
 
     @Test
     fun testRemoveOldPicturesNoOldPicturesDoesNothing() {
-        // If all remote assets are present in immichAssetIds, ssh should not be called
+        val runner = FakeProcessRunner()
         val remoteAssets = mapOf(
-            "frameo1" to listOf("img-1", "img-2"),
-            "frameo2" to listOf("img-2")
+            "frameo1" to listOf("11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"),
+            "frameo2" to listOf("22222222-2222-2222-2222-222222222222")
         )
-        val immichAssetIds = listOf("img-1", "img-2", "img-3")
+        val immichAssetIds = listOf("11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222")
 
-        // Should complete without error or attempting to spawn ssh
-        removeOldPictures(remoteAssets, immichAssetIds)
+        removeOldPictures(remoteAssets, immichAssetIds, runner)
+        assertTrue(runner.executedCommands.isEmpty(), "No SSH command should be executed when all assets exist")
     }
 
     @Test
     fun testRemoveOldPicturesIgnoresNonUuidFiles() {
-        // Non-UUID files such as user photos or system files in DCIM must never be deleted
+        val runner = FakeProcessRunner()
         val remoteAssets = mapOf(
             "frameo1" to listOf("IMG_0001", "some_pic", "dcim_backup")
         )
         val immichAssetIds = listOf("11111111-1111-1111-1111-111111111111")
 
-        // Non-UUID files will be filtered out by AssetIdRegex so no ssh command is executed
-        removeOldPictures(remoteAssets, immichAssetIds)
+        removeOldPictures(remoteAssets, immichAssetIds, runner)
+        assertTrue(runner.executedCommands.isEmpty(), "Non-UUID files must never trigger rm command")
+    }
+
+    @Test
+    fun testRemoveOldPicturesDeletesExpectedUuidAsset() {
+        val runner = FakeProcessRunner()
+        val keptUuid = "11111111-1111-1111-1111-111111111111"
+        val oldUuid = "22222222-2222-2222-2222-222222222222"
+        val keptUuid2 = "33333333-3333-3333-3333-333333333333"
+        val remoteAssets = mapOf(
+            "frameo1" to listOf(keptUuid, oldUuid, keptUuid2)
+        )
+        // 1 of 3 deleted -> within 50% safety guard
+        val immichAssetIds = listOf(keptUuid, keptUuid2)
+
+        removeOldPictures(remoteAssets, immichAssetIds, runner)
+        assertEquals(1, runner.executedCommands.size)
+        assertEquals("ssh", runner.executedCommands[0].first)
+        val args = runner.executedCommands[0].second
+        assertTrue(args.contains("frameo1"))
+        assertTrue(args.any { it.contains("rm -f") && it.contains(oldUuid) })
     }
 
     @Test
     fun testRemoveOldPicturesEmptyAlbumGuard() {
-        // When Immich returns 0 assets, deletion is blocked by default to prevent wiping frames
+        val runner = FakeProcessRunner()
         val remoteAssets = mapOf(
             "frameo1" to listOf("11111111-1111-1111-1111-111111111111")
         )
         val immichAssetIds = emptyList<String>()
-        removeOldPictures(remoteAssets, immichAssetIds)
+        removeOldPictures(remoteAssets, immichAssetIds, runner)
+        assertTrue(runner.executedCommands.isEmpty(), "Empty album must block deletion by default")
     }
 
     @Test
     fun testRemoveOldPicturesMassDeleteGuard() {
-        // When more than 50% of photos would be deleted, guard prevents deletion by default
+        val runner = FakeProcessRunner()
         val remoteAssets = mapOf(
             "frameo1" to listOf(
                 "11111111-1111-1111-1111-111111111111",
@@ -418,6 +439,57 @@ class MainTest {
         )
         // Only 1 of 3 assets kept -> 2/3 deleted (>50%)
         val immichAssetIds = listOf("11111111-1111-1111-1111-111111111111")
-        removeOldPictures(remoteAssets, immichAssetIds)
+        removeOldPictures(remoteAssets, immichAssetIds, runner)
+        assertTrue(runner.executedCommands.isEmpty(), "Mass delete (>50%) must be blocked by safety guard")
+    }
+
+    @Test
+    fun testRunJobUnreachableHostSkipped() {
+        val runner = FakeProcessRunner()
+        val assetUuid = "11111111-1111-1111-1111-111111111111"
+        val mockJson = """{"assets": [{"id": "$assetUuid", "type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "p1"}]}"""
+
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler {
+                    respond(mockJson, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+            }
+        }
+        val fetch: suspend (String, String?) -> HttpResponse = { path, _ -> client.get(path) }
+
+        // Host listing fails with exit code 255 (unreachable)
+        runner.exitCode = 255
+
+        runJob(
+            fetch = fetch,
+            albumId = "album-1",
+            resolution = "1920x1080",
+            quality = "90%",
+            frameoHosts = listOf("frameo-offline"),
+            processRunner = runner
+        )
+
+        // Only the ls command should have been attempted, no convert or scp
+        assertEquals(1, runner.executedCommands.size)
+        assertEquals("ssh", runner.executedCommands[0].first)
+        assertTrue(runner.executedCommands[0].second.any { it.contains("ls /data/data") })
+    }
+}
+
+class FakeProcessRunner : ProcessRunner {
+    val executedCommands = mutableListOf<Pair<String, List<String>>>()
+    var exitCode: Int = 0
+    val outputByCommand = mutableMapOf<String, Pair<Int, String>>()
+
+    override fun run(command: String, args: List<String>): Int {
+        executedCommands.add(command to args)
+        return exitCode
+    }
+
+    override fun runWithOutput(command: String, args: List<String>): Pair<Int, String> {
+        executedCommands.add(command to args)
+        val key = "$command ${args.joinToString(" ")}"
+        return outputByCommand[key] ?: Pair(exitCode, "")
     }
 }
