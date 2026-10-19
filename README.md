@@ -39,7 +39,11 @@ Host frameo_living_room
 ```
 
 > **Note**: Host names in `config` must start with `frameo` to be detected by the feeder.
-> Ensure `known_hosts` or `StrictHostKeyChecking accept-new` / `UserKnownHostsFile /dev/null` is properly configured, as `./ssh_config` is mounted read-only (`:ro`). Also ensure your private key file has `chmod 600` permissions.
+> Because `./ssh_config` is mounted read-only (`:ro`), scan each frame's host key into `ssh_config/known_hosts` ahead of time to enable strict verification:
+> ```bash
+> ssh-keyscan -p 8022 192.168.1.50 192.168.1.51 >> ssh_config/known_hosts
+> ```
+> Also ensure your private key file has `chmod 600` permissions (`chmod 600 ssh_config/id_frameo`).
 
 ### 2. Configure Environment
 

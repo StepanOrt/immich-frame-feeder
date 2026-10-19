@@ -129,14 +129,12 @@ suspend fun getImmichAssets(
 
 private val SshDefaultArgs = listOf(
     "-o", "BatchMode=yes",
-    "-o", "ConnectTimeout=10",
     "-o", "ServerAliveInterval=15",
     "-o", "ServerAliveCountMax=3"
 )
 
 private val ScpDefaultArgs = listOf(
-    "-o", "BatchMode=yes",
-    "-o", "ConnectTimeout=10"
+    "-o", "BatchMode=yes"
 )
 
 fun removeOldPictures(remoteAssetsByHost: Map<String, List<String>>, immichAssetIds: List<String>) {

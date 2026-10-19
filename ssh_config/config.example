@@ -1,6 +1,7 @@
 Host frameo*
-    StrictHostKeyChecking accept-new
+    StrictHostKeyChecking yes
     UserKnownHostsFile ~/.ssh/known_hosts
+    ConnectTimeout 10
 
 Host frameo_living_room
     User u0_a100
