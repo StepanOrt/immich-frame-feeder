@@ -363,13 +363,23 @@ class MainTest {
     }
 
     @Test
-    fun testResolveInputPathRejectsTraversalAndCoders() {
+    fun testResolveInputPathRejectsTraversal() {
         assertFailsWith<IllegalArgumentException> {
             resolveInputPath("../../etc/shadow")
         }
         assertFailsWith<IllegalArgumentException> {
-            resolveInputPath("text:/etc/passwd")
+            resolveInputPath("photos/../etc/passwd")
         }
+    }
+
+    @Test
+    fun testResolveInputPathAcceptsLegitimateDotsAndColons() {
+        val testBase = "/nonexistent_test_base"
+        val pathWithDots = "upload/user/IMG_1234..jpg"
+        assertEquals("$testBase/$pathWithDots", resolveInputPath(pathWithDots, baseDir = testBase))
+
+        val pathWithColon = "upload/user/2023-01-01 12:30:00.jpg"
+        assertEquals("$testBase/$pathWithColon", resolveInputPath(pathWithColon, baseDir = testBase))
     }
 
     @Test

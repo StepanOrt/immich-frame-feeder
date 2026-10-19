@@ -45,8 +45,9 @@ suspend fun HttpResponse.parseJson(): JsonElement =
     JsonDecoder.decodeFromString(bodyAsText())
 
 fun resolveInputPath(originalPath: String, baseDir: String = "/data"): String {
-    if (originalPath.contains("..") || originalPath.contains(":")) {
-        throw IllegalArgumentException("Invalid path: $originalPath")
+    val segments = originalPath.split('/', '\\')
+    if (segments.any { it == ".." }) {
+        throw IllegalArgumentException("Invalid path (directory traversal): $originalPath")
     }
     val clean = originalPath.removePrefix("/")
     val candidates = listOf(
@@ -256,15 +257,15 @@ fun runJob(
 
     for ((id, targetHosts) in hostsNeedingAsset) {
         val originalPath = immichAssetMap[id] ?: continue
-        val inputPath = resolveInputPath(originalPath)
-        if (FileSystem.SYSTEM.metadataOrNull(inputPath.toPath()) == null) {
-            println("Input file $inputPath doesn't exist")
-            continue
-        }
-
         val tmpOutputPath = "/tmp/$id.tmp.jpg"
         val outputPath = "/tmp/$id.jpg"
         try {
+            val inputPath = resolveInputPath(originalPath)
+            if (FileSystem.SYSTEM.metadataOrNull(inputPath.toPath()) == null) {
+                println("Input file $inputPath doesn't exist")
+                continue
+            }
+
             FileSystem.SYSTEM.delete(tmpOutputPath.toPath(), mustExist = false)
             FileSystem.SYSTEM.delete(outputPath.toPath(), mustExist = false)
 
@@ -302,6 +303,8 @@ fun runJob(
                     }
                 }
             }
+        } catch (e: Exception) {
+            println("Error processing asset $id ($originalPath): ${e.message}")
         } finally {
             FileSystem.SYSTEM.delete(tmpOutputPath.toPath(), mustExist = false)
             FileSystem.SYSTEM.delete(outputPath.toPath(), mustExist = false)
