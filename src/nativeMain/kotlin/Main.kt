@@ -291,7 +291,7 @@ fun runJob(
             }
             val convertStatus = processRunner.run(
                 "convert",
-                listOf(inputPath, "-auto-orient", "-strip", "-resize", resizeArg, "-quality", quality, tmpOutputPath)
+                listOf(inputPath, "-auto-orient", "-resize", resizeArg, "-quality", quality, tmpOutputPath)
             )
 
             if (convertStatus != 0) {

@@ -674,6 +674,8 @@ class MainTest {
             // Check convert args
             val convertArgs = runner.executedCommands[1].second
             assertTrue(convertArgs.contains("$testBase/photo.jpg"))
+            assertTrue(convertArgs.contains("-auto-orient"))
+            assertFalse(convertArgs.contains("-strip"))
             assertTrue(convertArgs.contains("1920x1080^>"))
             assertTrue(convertArgs.contains("/tmp/$assetUuid.tmp.jpg"))
 
