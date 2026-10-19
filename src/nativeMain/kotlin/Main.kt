@@ -201,11 +201,26 @@ fun runJob(
             .spawn()
         val output = child.waitWithOutput()
         if (output.status == 0) {
-            val assets = output.stdout?.split("\n")
-                ?.filter { it.endsWith(".jpg") }
-                ?.map { it.removeSuffix(".jpg") }
-                ?: emptyList()
+            val lines = output.stdout?.split("\n") ?: emptyList()
+            val assets = lines
+                .filter { it.endsWith(".jpg") }
+                .map { it.removeSuffix(".jpg") }
             remoteAssetsByHost[host] = assets
+
+            val staleParts = lines
+                .filter { it.endsWith(".jpg.part") }
+                .map { it.removeSuffix(".jpg.part") }
+                .filter { it.matches(AssetIdRegex) }
+            if (staleParts.isNotEmpty()) {
+                println("Cleaning up ${staleParts.size} stale .part files on $host")
+                val filesToRemove = staleParts.map { "/data/data/com.termux/files/home/storage/dcim/$it.jpg.part" }
+                val rmPartCmd = "rm -f " + filesToRemove.joinToString(" ")
+                Command("ssh")
+                    .args(SshDefaultArgs + listOf(host, rmPartCmd))
+                    .stdout(Stdio.Inherit)
+                    .spawn()
+                    .wait()
+            }
         } else {
             println("Failed to list existing assets on $host; skipping host for this cycle")
         }
