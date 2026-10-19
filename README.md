@@ -16,10 +16,10 @@ A lightweight Kotlin Native daemon that syncs photos from a designated [Immich](
 2. Lists existing images on Frameo devices over SSH (`ls /data/data/com.termux/files/home/storage/dcim/`).
 3. For any new photo in the album:
    - Locates the original file from the local library mount (`/data/<originalPath>`).
-   - Resizes and compresses with ImageMagick (`convert -resize 1920x1280^ -quality 99%`).
+   - Resizes and compresses with ImageMagick (`convert -resize 1920x1280^> -quality 99%`).
    - Copies it to all configured Frameo devices via SCP.
 4. If photos were removed from the Immich album, executes `rm` over SSH on each device to remove them.
-5. Sleeps for the remainder of the 60-second cycle and repeats.
+5. Sleeps for the remainder of the configured polling interval (`POLL_INTERVAL_SECONDS`, default 60s) and repeats.
 
 ## Setup & Deployment
 
@@ -36,6 +36,18 @@ Host frameo_living_room
     Port 8022
     IdentityFile ~/.ssh/id_frameo
     ConnectTimeout 5
+
+Host frameo_bedroom
+    User u0_a100
+    HostName 192.168.1.51
+    Port 8022
+    IdentityFile ~/.ssh/id_frameo
+    ConnectTimeout 5
+
+Host frameo*
+    StrictHostKeyChecking yes
+    UserKnownHostsFile ~/.ssh/known_hosts
+    ConnectTimeout 10
 ```
 
 > **Note**: Host names in `config` must start with `frameo` to be detected by the feeder.
@@ -43,7 +55,14 @@ Host frameo_living_room
 > ```bash
 > ssh-keyscan -p 8022 192.168.1.50 192.168.1.51 >> ssh_config/known_hosts
 > ```
-> Also ensure your private key file has `chmod 600` permissions (`chmod 600 ssh_config/id_frameo`).
+>
+> **Permissions & Non-Root User**: The container runs as non-root user `appuser` (UID 1000). Ensure the mounted files are readable by UID 1000:
+> ```bash
+> chmod 600 ssh_config/id_frameo
+> chmod 644 ssh_config/config ssh_config/known_hosts
+> # If your host user UID is not 1000:
+> chown -R 1000:1000 ssh_config/
+> ```
 
 ### 2. Configure Environment
 
@@ -62,6 +81,10 @@ FOTO_LIBRARY_PATH=/mnt/pool/foto
 RESOLUTION=1920x1280
 JPEG_QUALITY=99%
 POLL_INTERVAL_SECONDS=60
+
+# Optional safety overrides (default false)
+ALLOW_EMPTY_ALBUM=false
+ALLOW_MASS_DELETE=false
 ```
 
 ### 3. Run with Docker Compose
@@ -70,6 +93,11 @@ To pull and run using the published GitHub Container Registry image:
 
 ```bash
 docker compose up -d
+```
+
+If running directly with `docker run`, pass `--init` so zombie processes and signals are reaped cleanly:
+```bash
+docker run -d --init --name frameo ...
 ```
 
 Or build and run locally from source:
@@ -83,7 +111,7 @@ docker compose up -d --build
 ## Building from Source
 
 Requirements:
-- JDK 17+
+- JDK 21+ (CI uses JDK 25)
 - Kotlin Multiplatform / Native toolchain
 
 ```bash
