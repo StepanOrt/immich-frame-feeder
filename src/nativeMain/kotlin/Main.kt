@@ -210,22 +210,25 @@ fun runJob(
             continue
         }
 
+        val tmpOutputPath = "/tmp/$id.tmp.jpg"
         val outputPath = "/tmp/$id.jpg"
-        if (FileSystem.SYSTEM.metadataOrNull(outputPath.toPath()) == null) {
+        try {
+            FileSystem.SYSTEM.delete(tmpOutputPath.toPath(), mustExist = false)
+            FileSystem.SYSTEM.delete(outputPath.toPath(), mustExist = false)
+
             val convertChild = Command("convert")
-                .args(listOf(inputPath, "-auto-orient", "-strip", "-resize", "${resolution}^", "-quality", quality, outputPath))
+                .args(listOf(inputPath, "-auto-orient", "-strip", "-resize", "${resolution}^", "-quality", quality, tmpOutputPath))
                 .stdout(Stdio.Inherit)
                 .spawn()
 
             if (convertChild.wait() != 0) {
                 println("Failed to convert $inputPath")
                 continue
-            } else {
-                println("Converted $inputPath")
             }
-        }
 
-        try {
+            FileSystem.SYSTEM.atomicMove(tmpOutputPath.toPath(), outputPath.toPath())
+            println("Converted $inputPath")
+
             println("Pushing $outputPath to Frameo devices: $targetHosts")
             for (host in targetHosts) {
                 val partPath = "/data/data/com.termux/files/home/storage/dcim/$id.jpg.part"
@@ -247,6 +250,7 @@ fun runJob(
                 }
             }
         } finally {
+            FileSystem.SYSTEM.delete(tmpOutputPath.toPath(), mustExist = false)
             FileSystem.SYSTEM.delete(outputPath.toPath(), mustExist = false)
         }
     }
