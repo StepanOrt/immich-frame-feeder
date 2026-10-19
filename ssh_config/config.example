@@ -1,11 +1,3 @@
-Host frameo*
-    StrictHostKeyChecking yes
-    UserKnownHostsFile ~/.ssh/known_hosts
-    ConnectTimeout 10
-    ControlMaster auto
-    ControlPath /tmp/ssh-%r@%h:%p
-    ControlPersist 60s
-
 Host frameo_living_room
     User u0_a100
     HostName 192.168.1.50
@@ -19,3 +11,8 @@ Host frameo_bedroom
     Port 8022
     IdentityFile ~/.ssh/id_frameo
     ConnectTimeout 5
+
+Host frameo*
+    StrictHostKeyChecking yes
+    UserKnownHostsFile ~/.ssh/known_hosts
+    ConnectTimeout 10

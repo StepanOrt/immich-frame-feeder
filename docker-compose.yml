@@ -1,5 +1,6 @@
 services:
   frameo:
+    init: true
     restart: unless-stopped
     container_name: frameo
     image: ghcr.io/stepanort/immich-frame-feeder:latest
