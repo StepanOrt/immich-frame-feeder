@@ -56,6 +56,8 @@ fun resolveInputPath(originalPath: String, baseDir: String = "/data"): String {
         ?: candidates.first()
 }
 
+val AssetIdRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
 suspend fun getImmichAssets(
     fetch: suspend (path: String, body: String?) -> HttpResponse,
     albumId: String
@@ -104,6 +106,9 @@ suspend fun getImmichAssets(
     return images.map { asset ->
         val id = asset.jsonObject["id"]?.jsonPrimitive?.contentOrNull
             ?: throw IllegalStateException("Asset doesn't have id")
+        if (!id.matches(AssetIdRegex)) {
+            throw IllegalStateException("Asset id $id is not a valid UUID")
+        }
         val originalPath = asset.jsonObject["originalPath"]?.jsonPrimitive?.contentOrNull
             ?: throw IllegalStateException("Asset doesn't have originalPath")
         Pair(id, originalPath)
@@ -114,9 +119,6 @@ suspend fun getImmichAssets(
     fetch: (String) -> HttpResponse,
     albumId: String
 ): List<Pair<String, String>> = getImmichAssets({ path, _ -> fetch(path) }, albumId)
-
-
-private val AssetIdRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 private val SshDefaultArgs = listOf(
     "-o", "BatchMode=yes",

@@ -137,19 +137,19 @@ class MainTest {
                     "count": 3,
                     "items": [
                         {
-                            "id": "asset-1",
+                            "id": "11111111-1111-1111-1111-111111111111",
                             "type": "IMAGE",
                             "fileCreatedAt": "2023-01-01T10:00:00Z",
                             "originalPath": "/data/library/user/asset-1.jpg"
                         },
                         {
-                            "id": "asset-2",
+                            "id": "22222222-2222-2222-2222-222222222222",
                             "type": "VIDEO",
                             "fileCreatedAt": "2023-01-05T10:00:00Z",
                             "originalPath": "/data/library/user/asset-2.mp4"
                         },
                         {
-                            "id": "asset-3",
+                            "id": "33333333-3333-3333-3333-333333333333",
                             "type": "image",
                             "fileCreatedAt": "2023-01-03T10:00:00Z",
                             "originalPath": "/data/library/user/asset-3.jpg"
@@ -194,8 +194,8 @@ class MainTest {
 
             assertEquals("/api/search/metadata", requestedPath)
             assertEquals(2, assets.size)
-            assertEquals(Pair("asset-3", "/data/library/user/asset-3.jpg"), assets[0])
-            assertEquals(Pair("asset-1", "/data/library/user/asset-1.jpg"), assets[1])
+            assertEquals(Pair("33333333-3333-3333-3333-333333333333", "/data/library/user/asset-3.jpg"), assets[0])
+            assertEquals(Pair("11111111-1111-1111-1111-111111111111", "/data/library/user/asset-1.jpg"), assets[1])
         }
     }
 
@@ -208,19 +208,19 @@ class MainTest {
                 "albumName": "Family Frame",
                 "assets": [
                     {
-                        "id": "asset-1",
+                        "id": "11111111-1111-1111-1111-111111111111",
                         "type": "IMAGE",
                         "fileCreatedAt": "2023-01-01T10:00:00Z",
                         "originalPath": "upload/user/asset-1.jpg"
                     },
                     {
-                        "id": "asset-2",
+                        "id": "22222222-2222-2222-2222-222222222222",
                         "type": "VIDEO",
                         "fileCreatedAt": "2023-01-05T10:00:00Z",
                         "originalPath": "upload/user/asset-2.mp4"
                     },
                     {
-                        "id": "asset-3",
+                        "id": "33333333-3333-3333-3333-333333333333",
                         "type": "image",
                         "fileCreatedAt": "2023-01-03T10:00:00Z",
                         "originalPath": "upload/user/asset-3.jpg"
@@ -248,8 +248,8 @@ class MainTest {
             val assets = getImmichAssets(fetch, "album-123")
 
             assertEquals(2, assets.size)
-            assertEquals(Pair("asset-3", "upload/user/asset-3.jpg"), assets[0])
-            assertEquals(Pair("asset-1", "upload/user/asset-1.jpg"), assets[1])
+            assertEquals(Pair("33333333-3333-3333-3333-333333333333", "upload/user/asset-3.jpg"), assets[0])
+            assertEquals(Pair("11111111-1111-1111-1111-111111111111", "upload/user/asset-1.jpg"), assets[1])
         }
     }
 
@@ -304,7 +304,7 @@ class MainTest {
             }
 
             // Missing originalPath
-            val noPath = """{"assets": [{"id": "1", "type": "IMAGE", "fileCreatedAt": "2023-01-01"}]}"""
+            val noPath = """{"assets": [{"id": "11111111-1111-1111-1111-111111111111", "type": "IMAGE", "fileCreatedAt": "2023-01-01"}]}"""
             val clientNoPath = makeClient(noPath)
             assertFailsWith<IllegalStateException> {
                 getImmichAssets({ path -> runBlocking { clientNoPath.get(path) } }, "album-1")
@@ -312,12 +312,33 @@ class MainTest {
 
             // Missing fileCreatedAt (requires at least 2 items to trigger sorting comparison)
             val noDate = """{"assets": [
-                {"id": "1", "type": "IMAGE", "originalPath": "p1"},
-                {"id": "2", "type": "IMAGE", "originalPath": "p2"}
+                {"id": "11111111-1111-1111-1111-111111111111", "type": "IMAGE", "originalPath": "p1"},
+                {"id": "22222222-2222-2222-2222-222222222222", "type": "IMAGE", "originalPath": "p2"}
             ]}"""
             val clientNoDate = makeClient(noDate)
             assertFailsWith<IllegalStateException> {
                 getImmichAssets({ path -> runBlocking { clientNoDate.get(path) } }, "album-1")
+            }
+        }
+    }
+
+    @Test
+    fun testGetImmichAssetsInvalidUuidRejects() {
+        runBlocking {
+            val invalidUuidJson = """{"assets": [{"id": "not-a-uuid", "type": "IMAGE", "fileCreatedAt": "2023-01-01", "originalPath": "p"}]}"""
+            val client = HttpClient(MockEngine) {
+                engine {
+                    addHandler {
+                        respond(
+                            content = invalidUuidJson,
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "application/json")
+                        )
+                    }
+                }
+            }
+            assertFailsWith<IllegalStateException> {
+                getImmichAssets({ path -> runBlocking { client.get(path) } }, "album-1")
             }
         }
     }
