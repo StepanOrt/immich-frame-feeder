@@ -12,6 +12,7 @@ services:
       IMMICH_API_KEY: ${IMMICH_API_KEY}
       RESOLUTION: ${RESOLUTION:-1920x1280}
       JPEG_QUALITY: ${JPEG_QUALITY:-99%}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
     volumes:
       - ./ssh_config:/root/.ssh:ro
       - ${IMMICH_LIBRARY_PATH:-/mnt/pool/immich/library}:/data/upload:ro

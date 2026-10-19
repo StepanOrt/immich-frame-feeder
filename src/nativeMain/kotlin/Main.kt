@@ -15,6 +15,7 @@ import okio.Path.Companion.toPath
 import platform.posix.exit
 import platform.posix.getenv
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 fun parseFrameoHosts(sshConfig: String): List<String> =
@@ -323,8 +324,8 @@ fun main() = SuspendApp {
         }
     }
 
-    val pollIntervalSeconds = env("POLL_INTERVAL_SECONDS")?.toLongOrNull() ?: 60L
-    val pollDuration = kotlin.time.Duration.parseOrNull("${pollIntervalSeconds}s") ?: 1.minutes
+    val pollIntervalSeconds = (env("POLL_INTERVAL_SECONDS")?.toLongOrNull() ?: 60L).coerceAtLeast(10L)
+    val pollDuration = pollIntervalSeconds.seconds
 
     while (true) {
         val timeMark = TimeSource.Monotonic.markNow()

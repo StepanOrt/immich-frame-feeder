@@ -57,6 +57,7 @@ IMMICH_LIBRARY_PATH=/mnt/pool/immich/library
 FOTO_LIBRARY_PATH=/mnt/pool/foto
 RESOLUTION=1920x1280
 JPEG_QUALITY=99%
+POLL_INTERVAL_SECONDS=60
 ```
 
 ### 3. Run with Docker Compose
