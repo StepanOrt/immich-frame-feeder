@@ -353,12 +353,22 @@ class MainTest {
 
     @Test
     fun testResolveInputPathFallback() {
-        // When file does not exist, absolute path is preserved and relative path gets baseDir prefix
+        // When file does not exist, absolute path starting with baseDir is preserved and relative path gets baseDir prefix
         val absPath = "/data/library/user/photo.jpg"
         assertEquals(absPath, resolveInputPath(absPath))
 
         val relPath = "upload/user/photo.jpg"
         assertEquals("/data/$relPath", resolveInputPath(relPath))
+    }
+
+    @Test
+    fun testResolveInputPathRejectsTraversalAndCoders() {
+        assertFailsWith<IllegalArgumentException> {
+            resolveInputPath("../../etc/shadow")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            resolveInputPath("text:/etc/passwd")
+        }
     }
 
     @Test

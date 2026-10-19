@@ -45,13 +45,17 @@ suspend fun HttpResponse.parseJson(): JsonElement =
     PrettyPrintJson.decodeFromString(bodyAsText())
 
 fun resolveInputPath(originalPath: String, baseDir: String = "/data"): String {
+    if (originalPath.contains("..") || originalPath.contains(":")) {
+        throw IllegalArgumentException("Invalid path: $originalPath")
+    }
     val clean = originalPath.removePrefix("/")
     val candidates = listOf(
-        if (originalPath.startsWith("/")) originalPath else "$baseDir/$clean",
+        if (originalPath.startsWith("$baseDir/")) originalPath else "$baseDir/$clean",
         "$baseDir/$clean",
         "$baseDir/${clean.removePrefix("data/")}",
         "$baseDir/upload/${clean.removePrefix("data/library/").removePrefix("library/")}",
-        "$baseDir/upload/$clean"
+        "$baseDir/upload/$clean",
+        "$baseDir/foto/${clean.removePrefix("data/foto/").removePrefix("foto/")}"
     ).distinct()
     return candidates.firstOrNull { FileSystem.SYSTEM.metadataOrNull(it.toPath()) != null }
         ?: candidates.first()
@@ -237,8 +241,9 @@ fun runJob(
             FileSystem.SYSTEM.delete(tmpOutputPath.toPath(), mustExist = false)
             FileSystem.SYSTEM.delete(outputPath.toPath(), mustExist = false)
 
+            val resizeArg = if (resolution.endsWith(">")) resolution else "${resolution}^>"
             val convertChild = Command("convert")
-                .args(listOf(inputPath, "-auto-orient", "-strip", "-resize", "${resolution}^", "-quality", quality, tmpOutputPath))
+                .args(listOf(inputPath, "-auto-orient", "-strip", "-resize", resizeArg, "-quality", quality, tmpOutputPath))
                 .stdout(Stdio.Inherit)
                 .spawn()
 
