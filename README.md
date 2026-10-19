@@ -108,7 +108,7 @@ docker compose up -d --build
 ## Building from Source
 
 Requirements:
-- JDK 21+ (CI uses JDK 25)
+- JDK 17+ (CI uses JDK 25)
 - Kotlin Multiplatform / Native toolchain
 
 ```bash

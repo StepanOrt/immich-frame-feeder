@@ -50,6 +50,17 @@ class MainTest {
     }
 
     @Test
+    fun testResolutionRegexValidation() {
+        assertTrue("1920x1080".matches(ResolutionRegex))
+        assertTrue("1920x1080^".matches(ResolutionRegex))
+        assertTrue("1920x1080^>".matches(ResolutionRegex))
+        assertTrue("1920x1080!".matches(ResolutionRegex))
+        assertFalse("50%".matches(ResolutionRegex))
+        assertFalse("invalid".matches(ResolutionRegex))
+        assertFalse("1920".matches(ResolutionRegex))
+    }
+
+    @Test
     fun testCheckSuccessValid() {
         runBlocking {
             val client = HttpClient(MockEngine) {

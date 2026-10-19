@@ -63,6 +63,7 @@ fun resolveInputPath(originalPath: String, baseDir: String = "/data"): String {
 }
 
 val AssetIdRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+val ResolutionRegex = Regex("^\\d+x\\d+[\\^!<>]*$")
 
 suspend fun getImmichAssets(
     fetch: suspend (path: String, body: String?) -> HttpResponse,
@@ -266,7 +267,6 @@ fun runJob(
             FileSystem.SYSTEM.delete(outputPath.toPath(), mustExist = false)
 
             val resizeArg = when {
-                resolution.endsWith("^>") -> resolution
                 resolution.endsWith(">") -> resolution
                 resolution.endsWith("^") -> "${resolution}>"
                 else -> "${resolution}^>"
@@ -344,6 +344,10 @@ fun main() = SuspendApp {
     }
 
     val resolution = env("RESOLUTION") ?: "1920x1280"
+    if (!resolution.matches(ResolutionRegex)) {
+        println("Error: Invalid RESOLUTION format '$resolution'. Expected format like '1920x1280'")
+        return@SuspendApp
+    }
     val jpegQuality = env("JPEG_QUALITY") ?: "99%"
 
     val home = env("HOME")
