@@ -136,9 +136,24 @@ private val ScpDefaultArgs = listOf(
 
 fun removeOldPictures(remoteAssetsByHost: Map<String, List<String>>, immichAssetIds: List<String>) {
     val immichSet = immichAssetIds.toSet()
+    val allowEmptyAlbum = env("ALLOW_EMPTY_ALBUM")?.equals("true", ignoreCase = true) == true
+    val allowMassDelete = env("ALLOW_MASS_DELETE")?.equals("true", ignoreCase = true) == true
+
+    if (immichAssetIds.isEmpty() && !allowEmptyAlbum) {
+        println("Warning: Immich returned 0 assets for album. Skipping deletion to prevent accidental wipe. (Set ALLOW_EMPTY_ALBUM=true to override)")
+        return
+    }
+
     for ((host, assets) in remoteAssetsByHost) {
-        val oldAssets = assets.filter { it.matches(AssetIdRegex) && it !in immichSet }
+        val managedAssets = assets.filter { it.matches(AssetIdRegex) }
+        val oldAssets = managedAssets.filter { it !in immichSet }
+
         if (oldAssets.isNotEmpty()) {
+            if (managedAssets.isNotEmpty() && oldAssets.size > managedAssets.size / 2 && !allowMassDelete) {
+                println("Warning: Deleting ${oldAssets.size} of ${managedAssets.size} assets (>50%) on $host blocked by safety guard. (Set ALLOW_MASS_DELETE=true to override)")
+                continue
+            }
+
             println("Removing ${oldAssets.size} old assets from $host")
             // Batch deletion to avoid E2BIG command line length limits
             var allSucceeded = true

@@ -380,9 +380,34 @@ class MainTest {
         val remoteAssets = mapOf(
             "frameo1" to listOf("IMG_0001", "some_pic", "dcim_backup")
         )
-        val immichAssetIds = listOf<String>()
+        val immichAssetIds = listOf("11111111-1111-1111-1111-111111111111")
 
         // Non-UUID files will be filtered out by AssetIdRegex so no ssh command is executed
+        removeOldPictures(remoteAssets, immichAssetIds)
+    }
+
+    @Test
+    fun testRemoveOldPicturesEmptyAlbumGuard() {
+        // When Immich returns 0 assets, deletion is blocked by default to prevent wiping frames
+        val remoteAssets = mapOf(
+            "frameo1" to listOf("11111111-1111-1111-1111-111111111111")
+        )
+        val immichAssetIds = emptyList<String>()
+        removeOldPictures(remoteAssets, immichAssetIds)
+    }
+
+    @Test
+    fun testRemoveOldPicturesMassDeleteGuard() {
+        // When more than 50% of photos would be deleted, guard prevents deletion by default
+        val remoteAssets = mapOf(
+            "frameo1" to listOf(
+                "11111111-1111-1111-1111-111111111111",
+                "22222222-2222-2222-2222-222222222222",
+                "33333333-3333-3333-3333-333333333333"
+            )
+        )
+        // Only 1 of 3 assets kept -> 2/3 deleted (>50%)
+        val immichAssetIds = listOf("11111111-1111-1111-1111-111111111111")
         removeOldPictures(remoteAssets, immichAssetIds)
     }
 }

@@ -13,6 +13,8 @@ services:
       RESOLUTION: ${RESOLUTION:-1920x1280}
       JPEG_QUALITY: ${JPEG_QUALITY:-99%}
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+      ALLOW_EMPTY_ALBUM: ${ALLOW_EMPTY_ALBUM:-false}
+      ALLOW_MASS_DELETE: ${ALLOW_MASS_DELETE:-false}
     volumes:
       - ./ssh_config:/root/.ssh:ro
       - ${IMMICH_LIBRARY_PATH:-/mnt/pool/immich/library}:/data/upload:ro
