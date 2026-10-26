@@ -27,8 +27,8 @@ kotlin {
                 implementation("io.ktor:ktor-client-core:3.6.0")
                 implementation("io.ktor:ktor-client-curl:3.6.0")
                 implementation("com.squareup.okio:okio:3.18.2")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.12.0")
             }
         }
         getByName("nativeTest") {
