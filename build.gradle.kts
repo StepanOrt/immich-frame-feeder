@@ -24,8 +24,8 @@ kotlin {
             dependencies {
                 implementation("io.arrow-kt:suspendapp:2.2.3")
                 implementation("com.kgit2:kommand:2.3.0")
-                implementation("io.ktor:ktor-client-core:3.6.0")
-                implementation("io.ktor:ktor-client-curl:3.6.0")
+                implementation("io.ktor:ktor-client-core:3.6.1")
+                implementation("io.ktor:ktor-client-curl:3.6.1")
                 implementation("com.squareup.okio:okio:3.18.2")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
@@ -34,7 +34,7 @@ kotlin {
         getByName("nativeTest") {
             dependencies {
                 implementation(kotlin("test"))
-                implementation("io.ktor:ktor-client-mock:3.6.0")
+                implementation("io.ktor:ktor-client-mock:3.6.1")
             }
         }
     }
