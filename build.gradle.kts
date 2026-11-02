@@ -22,7 +22,7 @@ kotlin {
         }
         getByName("nativeMain") {
             dependencies {
-                implementation("io.arrow-kt:suspendapp:2.2.3")
+                implementation("io.arrow-kt:suspendapp:2.3.0.1")
                 implementation("com.kgit2:kommand:2.3.0")
                 implementation("io.ktor:ktor-client-core:3.6.0")
                 implementation("io.ktor:ktor-client-curl:3.6.0")
